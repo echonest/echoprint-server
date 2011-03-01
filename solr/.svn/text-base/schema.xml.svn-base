@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+
+<schema name="fingerprinter" version="1.2">
+
+  <types>
+    <!-- A string field for the track IDs -->
+    <fieldType name="string" class="solr.StrField" sortMissingLast="true" omitNorms="true"/>
+
+    <!-- A field for the fingerprint hashes and time offsets -->
+    <fieldType name="fphash" class="solr.TextField">
+      <analyzer type="index" class="com.echonest.knowledge.hashr.HashAnalyzer"/>
+      <analyzer type="query" class="com.echonest.knowledge.hashr.HashAnalyzer"/>
+    </fieldType>
+  </types>
+
+  <fields>
+
+    <!-- The ID for a track, which is our unique key -->
+    <field name="track_id" type="string" indexed="true" stored="true" required="true"/>
+
+    <!-- The hashes associated with a track, which is our default search field -->
+    <field name="fp" type="fphash" indexed="true" stored="false" required="true"/>
+
+  </fields>
+
+  <!-- Field to use to determine and enforce document uniqueness. 
+       Unless this field is marked with required="false", it will be a required field
+  -->
+  <uniqueKey>track_id</uniqueKey>
+
+  <!-- field for the QueryParser to use when an explicit fieldname is absent -->
+  <defaultSearchField>fp</defaultSearchField>
+
+  <!-- SolrQueryParser configuration: defaultOperator="AND|OR" -->
+  <solrQueryParser defaultOperator="OR"/>
+
+</schema>
