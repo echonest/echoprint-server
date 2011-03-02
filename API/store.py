@@ -7,11 +7,7 @@ from pool import ConnectionPool, pooled_connection
 
 # If running locally just have this be localhost.
 # If not change at will
-#node = "174.129.90.114"
-#node = "127.0.0.1"
-#node = '174.129.156.231'
-#node = '204.236.209.128'
-node = '204.236.252.174'
+node = '127.0.0.1'
 _nodes = [node+":7705"]
     
 # Holds or persisted connections (until close() is called)

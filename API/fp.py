@@ -103,7 +103,7 @@ def _get_actual_score(args):
 
 # Given a query code string of any type (space sep, compressed, hexed, etc), find the best match from the FP flat (or local, or alt.)
 # Do all the elbow stuff, time matching, etc. This is called directly by the API.
-def best_match_for_query(code_string, elbow=8, which_flat="fp", local=False):
+def best_match_for_query(code_string, elbow=8, local=False):
     # DEC strings come in as unicode so we have to force them to ASCII
     code_string = ascii(code_string)
     tic = int(time.time()*1000)
@@ -120,7 +120,7 @@ def best_match_for_query(code_string, elbow=8, which_flat="fp", local=False):
         return Response(Response.NOT_ENOUGH_CODE, tic=tic)
 
     # Query the FP flat directly.
-    response = query_fp(code_string, rows=10, which_flat=which_flat, local=local)
+    response = query_fp(code_string, rows=10, local=local)
     logger.debug("solr qtime is %d" % (response.header["QTime"]))
     
     if len(response.results) == 0:
@@ -295,14 +295,12 @@ def delete(track_ids, commit=True, local=False):
         print "not implemented yet"
         return
 
-    fp_host = get_fp_flat_host(which_flat)
-    
     _fp_solr.delete_many(track_ids)
     if commit:
         commit()
 
     
-def ingest(code_string_dict, commit=True, which_flat="fp", local=False):
+def ingest(code_string_dict, commit=True, local=False):
     # ingest doc into fp flat. input is a dict like {"TR12345":"10 1230 19 10203 123 40240", "TR12346":"10 1938 1928 4393 2032"}
     if local:
         return local_ingest(code_string_dict)
@@ -318,7 +316,7 @@ def ingest(code_string_dict, commit=True, which_flat="fp", local=False):
 def commit(local=False):
     _fp_solr.commit()
 
-def query_fp(code_string, rows=15, which_flat="fp", local=False):
+def query_fp(code_string, rows=15, local=False):
     if local:
         return local_query_fp(code_string, rows)
     
