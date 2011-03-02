@@ -12,7 +12,7 @@ import store
 import solr
 import threadrun
 from collections import defaultdict
-import zlib, base64, re, time
+import zlib, base64, re, time, random, string
 
 try:
     import json
@@ -20,8 +20,7 @@ except ImportError:
     import simplejson as json
 
 _fp_solr = solr.SolrConnection("http://localhost:8983/solr")
-_time_decimate_ms = 32
-
+_hexpoch = int(time.time() * 1000)
 logger = logging.getLogger(__name__)
 
 
@@ -331,4 +330,17 @@ def fp_code_for_track_id(track_id, local=False):
     if local:
         return local_fp_code_for_track_id(track_id)
     return store.retrieve(track_id, "fp_codes")
+
+def new_track_id():
+    rand5 = ''.join(random.choice(string.letters) for x in xrange(5)).upper()
+    global _hexpoch
+    _hexpoch += 1
+    hexpoch = str(hex(_hexpoch))[2:].upper()
+    ## On 32-bit machines, the number of milliseconds since 1970 is 
+    ## a longint. On 64-bit it is not.
+    hexpoch = hexpoch.rstrip('L')
+    return "TR" + rand5 + hexpoch
+
+
+    
 
