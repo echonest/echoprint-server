@@ -8,7 +8,6 @@ Copyright (c) 2010 The Echo Nest Corporation. All rights reserved.
 """
 from __future__ import with_statement
 import logging
-import store
 import solr
 import threadrun
 from collections import defaultdict
@@ -321,7 +320,7 @@ def query_fp(code_string, rows=15, local=False):
     
     try:
         # query the fp flat
-        resp = _fp_solr.query(code_string, qt="/hashq", rows=rows)
+        resp = _fp_solr.query(code_string, qt="/hashq", rows=rows, fl="track_id")
         return resp
     except SolrException:
         return None
@@ -329,7 +328,12 @@ def query_fp(code_string, rows=15, local=False):
 def fp_code_for_track_id(track_id, local=False):
     if local:
         return local_fp_code_for_track_id(track_id)
-    return store.retrieve(track_id, "fp_codes")
+    # Get it from solr
+    resp = _fp_solr.query("track_id:"+track_id, rows=1, fl="fp")
+    if len(resp.results):
+        return resp.results[0]["fp"]
+    else:
+        return None
 
 def new_track_id():
     rand5 = ''.join(random.choice(string.letters) for x in xrange(5)).upper()
