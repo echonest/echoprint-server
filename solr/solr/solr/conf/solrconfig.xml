@@ -46,12 +46,12 @@
   <!-- A dir option by itself adds any files found in the directory to the
        classpath, this is useful for including all jars in a directory.
     -->
-  <lib dir="/data/solr/extra-libs"/>
+  <lib dir="/Users/bwhitman/outside/echoprint-server/solr/solr/extra-libs"/>
   
   <!-- Used to specify an alternate directory to hold all index data
        other than the default ./data under the Solr home.
        If replication is in use, this should match the replication configuration. -->
-  <dataDir>${solr.data.dir:/data/solr/data}</dataDir>
+  <dataDir>/Users/bwhitman/outside/echoprint-server/solr/solr/data</dataDir>
 
 
   <!-- WARNING: this <indexDefaults> section only provides defaults for index writers
@@ -219,11 +219,11 @@
          maxTime - oldest uncommited update (in ms) is this long ago
          Instead of enabling autoCommit, consider using "commitWithin"
          when adding documents. http://wiki.apache.org/solr/UpdateXmlMessages
-    <autoCommit> 
-      <maxDocs>10000</maxDocs>
-      <maxTime>1000</maxTime> 
-    </autoCommit>
     -->
+    <autoCommit> 
+      <maxDocs>1000</maxDocs>
+      <maxTime>120000</maxTime> 
+    </autoCommit>
 
 
     <!-- The RunExecutableListener executes an external command from a

@@ -9,7 +9,9 @@
     <!-- A field for the fingerprint hashes and time offsets -->
     <fieldType name="fphash" class="solr.TextField">
       <analyzer type="index" class="com.echonest.knowledge.hashr.HashAnalyzer"/>
-      <analyzer type="query" class="com.echonest.knowledge.hashr.HashAnalyzer"/>
+      <analyzer type="query">
+	<tokenizer class="solr.WhitespaceTokenizerFactory"/>
+      </analyzer>
     </fieldType>
   </types>
 
@@ -19,7 +21,7 @@
     <field name="track_id" type="string" indexed="true" stored="true" required="true"/>
 
     <!-- The hashes associated with a track, which is our default search field -->
-    <field name="fp" type="fphash" indexed="true" stored="false" required="true"/>
+    <field name="fp" type="fphash" indexed="true" stored="true" required="true"/>
 
   </fields>
 

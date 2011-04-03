@@ -1,1 +1,4 @@
-Server components for Echoprint. In progress. and test
+Server components for Echoprint. In progress.
+
+java -Dsolr.solr.home=/Users/bwhitman/outside/echoprint-server/solr/solr/solr/ -Djava.awt.headless=true -DSTOP.PORT=8079 -DSTOP.KEY=stopkey -jar start.jar
+
