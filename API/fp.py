@@ -18,7 +18,7 @@ try:
 except ImportError:
     import simplejson as json
 
-_fp_solr = solr.SolrConnection("http://localhost:8983/solr")
+_fp_solr = solr.SolrConnection("http://localhost:8502/solr/fp")
 _hexpoch = int(time.time() * 1000)
 logger = logging.getLogger(__name__)
 
@@ -78,7 +78,7 @@ def inflate_code_string(s):
     return ' '.join('%d %d' % (c, t) for c,t in zip(codes, times))
      
 def decode_code_string(compressed_code_string):
-    compressed_code_string = ascii(compressed_code_string)
+    compressed_code_string = compressed_code_string.encode('ascii','ignore')
     # do the zlib/base64 stuff
     try:
         # this will decode both URL safe b64 and non-url-safe
@@ -103,7 +103,7 @@ def _get_actual_score(args):
 # Do all the elbow stuff, time matching, etc. This is called directly by the API.
 def best_match_for_query(code_string, elbow=8, local=False):
     # DEC strings come in as unicode so we have to force them to ASCII
-    code_string = ascii(code_string)
+    code_string = code_string.encode('ascii','ignore')
     tic = int(time.time()*1000)
 
     # First see if this is a compressed code
@@ -283,7 +283,7 @@ def local_fp_code_for_track_id(track_id):
     and these are the server-hosted versions of query, ingest and delete 
 """
 
-def delete(track_ids, commit=True, local=False):
+def delete(track_ids, do_commit=True, local=False):
     # delete one or more track_ids from the fp flat. 
     if not isinstance(track_ids, list):
         track_ids = [track_ids]
@@ -294,21 +294,21 @@ def delete(track_ids, commit=True, local=False):
         return
 
     _fp_solr.delete_many(track_ids)
-    if commit:
+    if do_commit:
         commit()
 
     
-def ingest(code_string_dict, commit=True, local=False):
+def ingest(code_string_dict, do_commit=True, local=False):
     # ingest doc into fp flat. input is a dict like {"TR12345":"10 1230 19 10203 123 40240", "TR12346":"10 1938 1928 4393 2032"}
     if local:
         return local_ingest(code_string_dict)
 
     docs = []
-    for t in code_string_dict.keys():
+    for t in code_string_dict.keys():        
         docs.append({"track_id":t, "fp":code_string_dict[t]})
 
     _fp_solr.add_many(docs)
-    if commit:
+    if do_commit:
         commit()
 
 def commit(local=False):
@@ -322,7 +322,7 @@ def query_fp(code_string, rows=15, local=False):
         # query the fp flat
         resp = _fp_solr.query(code_string, qt="/hashq", rows=rows, fl="track_id")
         return resp
-    except SolrException:
+    except solr.SolrException:
         return None
 
 def fp_code_for_track_id(track_id, local=False):
