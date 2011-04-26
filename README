@@ -30,7 +30,7 @@ solr/ - complete solr install with Hashr already in the right place and with the
 
 == How to run the server ==
 
-1. Start the server like this (change your home directory to where you have echoprint-server)
+1. Start the server like this (change your home directory to where you have echoprint-server/solr/solr)
 
 java -Dsolr.solr.home=/Users/bwhitman/outside/echoprint-server/solr/solr/solr/ -Djava.awt.headless=true -jar start.jar
 
