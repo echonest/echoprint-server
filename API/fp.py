@@ -9,7 +9,6 @@ Copyright (c) 2010 The Echo Nest Corporation. All rights reserved.
 from __future__ import with_statement
 import logging
 import solr
-import threadrun
 from collections import defaultdict
 import zlib, base64, re, time, random, string
 
@@ -118,7 +117,7 @@ def best_match_for_query(code_string, elbow=8, local=False):
         return Response(Response.NOT_ENOUGH_CODE, tic=tic)
 
     # Query the FP flat directly.
-    response = query_fp(code_string, rows=10, local=local)
+    response = query_fp(code_string, rows=10, local=local, get_data=True)
     logger.debug("solr qtime is %d" % (response.header["QTime"]))
     
     if len(response.results) == 0:
@@ -145,23 +144,8 @@ def best_match_for_query(code_string, elbow=8, local=False):
         for r in response.results:
             original_scores[r["track_id"]] = int(r["score"])
             args.append( ([code_string, r["track_id"], local, elbow], ) )
+            actual_scores[r["track_id"]] = actual_matches(code_string, r["fp"], elbow=elbow)
         
-        nthreads = 10
-        if nthreads > len(response.results):
-            nthreads = len(response.results)
-
-        logger.debug("time pre threadrun %2.6f" % (time.time()-tic))
-
-        tic0 = time.time()
-        threaded_results = threadrun.launch(_get_actual_score, nthreads = nthreads, argtuples = args)
-        logger.debug("time for threadrun %2.6f" % (time.time()-tic0))
-        
-        # Unpack the threaded result -- it is a list of tuples, the 2nd member of each tuple is the response.
-        for x in threaded_results:
-            actual_scores[ x[0][0][1] ] = x[1]
-
-        #logger.debug("Actual score for %s is %d (code_len %d), original was %d" % (r["track_id"], actual_scores[r["track_id"]], code_len, top_match_score))
-
         # Sort the actual scores
         sorted_actual_scores = sorted(actual_scores.iteritems(), key=lambda (k,v): (v,k), reverse=True)
         # Get the top one
@@ -255,7 +239,10 @@ class FakeSolrResponse(object):
         self.header = {'QTime': 0}
         self.results = []
         for r in results:
-            self.results.append({"score":r[1], "track_id":r[0]})
+            if len(r) > 2:
+                self.results.append({"score":r[1], "track_id":r[0], "fp":r[2]})
+            else:
+                self.results.append({"score":r[1], "track_id":r[0]})
     
 def local_ingest(code_string_dict, store_data=True):
     # If store_data is false, you won't be able to call fp_code_for_track_id(local=true)
@@ -266,7 +253,7 @@ def local_ingest(code_string_dict, store_data=True):
         for k in keys:
             _index.setdefault(k,[]).append(track)
 
-def local_query_fp(code_string,rows=10):
+def local_query_fp(code_string,rows=10,get_data=False):
     keys = code_string.split(" ")[0::2]
     track_hist = []
     for k in keys:
@@ -274,7 +261,15 @@ def local_query_fp(code_string,rows=10):
     top_matches = defaultdict(int)
     for track in track_hist:
         top_matches[track] += 1
-    return FakeSolrResponse(sorted(top_matches.iteritems(), key=lambda (k,v): (v,k), reverse=True)[0:rows])
+    if get_data:
+        # Make a list of lists that have track_id, score
+        return FakeSolrResponse(sorted(top_matches.iteritems(), key=lambda (k,v): (v,k), reverse=True)[0:rows])
+    else:
+        # Make a list of lists that have track_id, score, then fp
+        lol = sorted(top_matches.iteritems(), key=lambda (k,v): (v,k), reverse=True)[0:rows]
+        for x in lol:
+            x.append(_store[x[0]])
+        return FakeSolrResponse(lol)
 
 def local_fp_code_for_track_id(track_id):
     return _store[track_id]
@@ -314,13 +309,16 @@ def ingest(code_string_dict, do_commit=True, local=False):
 def commit(local=False):
     _fp_solr.commit()
 
-def query_fp(code_string, rows=15, local=False):
+def query_fp(code_string, rows=15, local=False, get_data=False):
     if local:
-        return local_query_fp(code_string, rows)
+        return local_query_fp(code_string, rows, get_data=get_data)
     
     try:
         # query the fp flat
-        resp = _fp_solr.query(code_string, qt="/hashq", rows=rows, fl="track_id")
+        if get_data:
+            resp = _fp_solr.query(code_string, qt="/hashq", rows=rows, fields="track_id,fp")
+        else:
+            resp = _fp_solr.query(code_string, qt="/hashq", rows=rows, fields="track_id")
         return resp
     except solr.SolrException:
         return None
