@@ -91,13 +91,6 @@ def decode_code_string(compressed_code_string):
         actual_code = inflate_code_string(actual_code)
     return actual_code
 
-def _get_actual_score(args):
-    code_string = args[0]
-    track_id = args[1]
-    local = args[2]
-    elbow = args[3]
-    return actual_matches(code_string, fp_code_for_track_id(track_id, local=local), elbow=elbow)
-
 # Given a query code string of any type (space sep, compressed, hexed, etc), find the best match from the FP flat (or local, or alt.)
 # Do all the elbow stuff, time matching, etc. This is called directly by the API.
 def best_match_for_query(code_string, elbow=8, local=False):
@@ -139,11 +132,8 @@ def best_match_for_query(code_string, elbow=8, local=False):
         actual_scores = {}
         
         # For each result compute the "actual score" (based on the histogram matching)
-        args = []
-
         for r in response.results:
             original_scores[r["track_id"]] = int(r["score"])
-            args.append( ([code_string, r["track_id"], local, elbow], ) )
             actual_scores[r["track_id"]] = actual_matches(code_string, r["fp"], elbow=elbow)
         
         # Sort the actual scores
@@ -239,16 +229,15 @@ class FakeSolrResponse(object):
         self.header = {'QTime': 0}
         self.results = []
         for r in results:
+            # If the result list has more than 2 elements we've asked for data as well
             if len(r) > 2:
                 self.results.append({"score":r[1], "track_id":r[0], "fp":r[2]})
             else:
                 self.results.append({"score":r[1], "track_id":r[0]})
     
-def local_ingest(code_string_dict, store_data=True):
-    # If store_data is false, you won't be able to call fp_code_for_track_id(local=true)
+def local_ingest(code_string_dict):
     for track in code_string_dict.keys():
-        if store_data:
-            _store[track] = code_string_dict[track]
+        _store[track] = code_string_dict[track]
         keys = set(code_string_dict[track].split(" ")[0::2]) # just one code indexed
         for k in keys:
             _index.setdefault(k,[]).append(track)
