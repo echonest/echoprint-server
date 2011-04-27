@@ -316,7 +316,7 @@ def fp_code_for_track_id(track_id, local=False):
     if local:
         return local_fp_code_for_track_id(track_id)
     # Get it from solr
-    resp = _fp_solr.query("track_id:"+track_id, rows=1, fl="fp")
+    resp = _fp_solr.query("track_id:"+track_id, rows=1, fields="fp")
     if len(resp.results):
         return resp.results[0]["fp"]
     else:
