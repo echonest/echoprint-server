@@ -46,12 +46,13 @@
   <!-- A dir option by itself adds any files found in the directory to the
        classpath, this is useful for including all jars in a directory.
     -->
-  <lib dir="/Users/bwhitman/outside/echoprint-server/solr/solr/extra-libs"/>
+  <lib dir="../extra-libs"/>
+   
   
   <!-- Used to specify an alternate directory to hold all index data
        other than the default ./data under the Solr home.
        If replication is in use, this should match the replication configuration. -->
-  <dataDir>/Users/bwhitman/outside/echoprint-server/solr/solr/data</dataDir>
+  <dataDir>../data</dataDir>
 
 
   <!-- WARNING: this <indexDefaults> section only provides defaults for index writers
