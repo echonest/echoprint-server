@@ -4,7 +4,7 @@ Server components for Echoprint.
 
 The Echoprint server is a custom component for Apache Solr to store and index Echoprint codes and hash times. We also include the python API layer code necessary to match tracks based on the response from the custom component as well as a demo (non-production) API meant to illustrate how to setup and run the Echoprint service.
 
-Non-included requirements for the server:
+Non-included requirements for the server (newota):
 
 - java 1.6
 - python 2.5 or higher
