@@ -51,12 +51,12 @@ class Response(object):
     
     def match(self):
         return self.TRID is not None
-       
+     
 def inflate_code_string(s):
     """ Takes an uncompressed code string consisting of 0-padded fixed-width
         sorted hex and converts it to the standard code string."""
-    n = int(len(s) / 4.0)
-    
+    n = int(len(s) / 9.0) # 4 bytes for hash, 5 bytes for time
+
     def pairs(l, n=2):
         """Non-overlapping [1,2,3,4] -> [(1,2), (3,4)]"""
         # return zip(*[[v for i,v in enumerate(l) if i % n == j] for j in range(n)])
@@ -67,12 +67,18 @@ def inflate_code_string(s):
             res.append(tuple(l[start:end]))
             end += n
         return res
-    
-    # Parse out n groups of 5 timestamps in hex; then n groups of 8 hash codes in hex.
-    codes = [int(''.join(t), 16) for t in pairs(s, 4)]
 
-    return ' '.join(map(str,codes))
-     
+    # Parse out n groups of 5 timestamps in hex; then n groups of 8 hash codes in hex.
+    end_timestamps = n*5
+    times = [int(''.join(t), 16) for t in pairs(s[:end_timestamps], 5)]
+    codes = [int(''.join(t), 16) for t in pairs(s[end_timestamps:], 4)]
+
+    assert(len(times) == len(codes)) # these should match up!
+    return ' '.join('%d %d' % (c, t) for c,t in zip(codes, times))
+    
+        
+
+
 def decode_code_string(compressed_code_string):
     compressed_code_string = compressed_code_string.encode('ascii','ignore')
     # do the zlib/base64 stuff
