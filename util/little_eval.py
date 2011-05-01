@@ -49,20 +49,31 @@ def codegen(filename, start=10, duration=30):
 
 
 def main():
+    if not len(sys.argv)==3:
+        print "usage: python little_eval.py database_list query_list"
+        sys.exit()
+        
     fp_codes = {}
-    for line in fileinput.input():
-        line = line[:-1]
-        print line
+    database_list = open(sys.argv[1]).read().split("\n")
+    query_list = open(sys.argv[2]).read().split("\n")
+    for file in database_list:
+        print file
+        if len(fp_codes.keys()) > 10:
+            break
         # TODO - use threaded codegen
-        j = codegen(line)
+        j = codegen(file)
         if len(j):
             code_str = fp.decode_code_string(j[0]["code"])
-            fp_codes[line] = code_str
+            fp_codes[file] = code_str
+    print "ingesting"
     fp.ingest(fp_codes, local=True)
-
-    for x in fp_codes.keys():
-        r = fp.best_match_for_query(fp_codes[x], local=True)
-        print "For %s: %s %d (%s)" % (x, r.TRID, r.score, r.message())
+    
+    for file in query_list:
+        print file
+        j = codegen(file)
+        if len(j):
+            r = fp.best_match_for_query(j[0]["code"], local=True)
+            print "For %s: %s %d (%s)" % (file, r.TRID, r.score, r.message())
         
 
 if __name__ == '__main__':

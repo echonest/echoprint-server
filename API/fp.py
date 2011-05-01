@@ -247,12 +247,13 @@ def local_query_fp(code_string,rows=10,get_data=False):
     top_matches = defaultdict(int)
     for track in track_hist:
         top_matches[track] += 1
-    if get_data:
+    if not get_data:
         # Make a list of lists that have track_id, score
         return FakeSolrResponse(sorted(top_matches.iteritems(), key=lambda (k,v): (v,k), reverse=True)[0:rows])
     else:
         # Make a list of lists that have track_id, score, then fp
         lol = sorted(top_matches.iteritems(), key=lambda (k,v): (v,k), reverse=True)[0:rows]
+        lol = map(list, lol)
         for x in lol:
             x.append(_store[x[0]])
         return FakeSolrResponse(lol)
