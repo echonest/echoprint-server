@@ -55,7 +55,7 @@ class Response(object):
 def inflate_code_string(s):
     """ Takes an uncompressed code string consisting of 0-padded fixed-width
         sorted hex and converts it to the standard code string."""
-    n = int(len(s) / 13.0)
+    n = int(len(s) / 4.0)
     
     def pairs(l, n=2):
         """Non-overlapping [1,2,3,4] -> [(1,2), (3,4)]"""
@@ -69,12 +69,9 @@ def inflate_code_string(s):
         return res
     
     # Parse out n groups of 5 timestamps in hex; then n groups of 8 hash codes in hex.
-    end_timestamps = n*5
-    times = [int(''.join(t), 16) for t in pairs(s[:end_timestamps], 5)]
-    codes = [int(''.join(t), 16) for t in pairs(s[end_timestamps:], 8)]
-    
-    assert(len(times) == len(codes)) # these should match up!
-    return ' '.join('%d %d' % (c, t) for c,t in zip(codes, times))
+    codes = [int(''.join(t), 16) for t in pairs(s, 4)]
+
+    return ' '.join(map(str,codes))
      
 def decode_code_string(compressed_code_string):
     compressed_code_string = compressed_code_string.encode('ascii','ignore')
