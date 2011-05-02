@@ -9,6 +9,7 @@ Copyright (c) 2010 The Echo Nest Corporation. All rights reserved.
 from __future__ import with_statement
 import logging
 import solr
+import pickle
 from collections import defaultdict
 import zlib, base64, re, time, random, string
 
@@ -52,6 +53,7 @@ class Response(object):
     def match(self):
         return self.TRID is not None
      
+
 def inflate_code_string(s):
     """ Takes an uncompressed code string consisting of 0-padded fixed-width
         sorted hex and converts it to the standard code string."""
@@ -115,6 +117,8 @@ def best_match_for_query(code_string, elbow=8, local=False):
     # Query the FP flat directly.
     response = query_fp(code_string, rows=10, local=local, get_data=True)
     logger.debug("solr qtime is %d" % (response.header["QTime"]))
+    
+    _debug_print_response(code_string, response, elbow=elbow)
     
     if len(response.results) == 0:
         return Response(Response.NO_RESULTS, qtime=response.header["QTime"], tic=tic)
@@ -225,8 +229,8 @@ def actual_matches(code_string_query, code_string_match, slop = 2, elbow = 10):
     NB: delete is not supported locally yet
     
 """
-_index = {}
-_store = {}
+_fake_solr = {"index": {}, "store": {}}
+
 class FakeSolrResponse(object):
     def __init__(self, results):
         self.header = {'QTime': 0}
@@ -238,18 +242,33 @@ class FakeSolrResponse(object):
             else:
                 self.results.append({"score":r[1], "track_id":r[0]})
     
+def local_load(filename):
+    global _fake_solr
+    print "Loading from " + filename
+    disk = open(filename,"rb")
+    _fake_solr = pickle.load(disk)
+    disk.close()
+    print "Done"
+    
+def local_save(filename):
+    print "Saving to " + filename
+    disk = open(filename,"wb")
+    pickle.dump(_fake_solr,disk)
+    disk.close()
+    print "Done"
+    
 def local_ingest(code_string_dict):
     for track in code_string_dict.keys():
-        _store[track] = code_string_dict[track]
+        _fake_solr["store"][track] = code_string_dict[track]
         keys = set(code_string_dict[track].split(" ")[0::2]) # just one code indexed
         for k in keys:
-            _index.setdefault(k,[]).append(track)
+            _fake_solr["index"].setdefault(k,[]).append(track)
 
 def local_query_fp(code_string,rows=10,get_data=False):
     keys = code_string.split(" ")[0::2]
     track_hist = []
     for k in keys:
-        track_hist += _index.get(k, [])
+        track_hist += _fake_solr["index"].get(k, [])
     top_matches = defaultdict(int)
     for track in track_hist:
         top_matches[track] += 1
@@ -261,11 +280,11 @@ def local_query_fp(code_string,rows=10,get_data=False):
         lol = sorted(top_matches.iteritems(), key=lambda (k,v): (v,k), reverse=True)[0:rows]
         lol = map(list, lol)
         for x in lol:
-            x.append(_store[x[0]])
+            x.append(_fake_solr["store"][x[0]])
         return FakeSolrResponse(lol)
 
 def local_fp_code_for_track_id(track_id):
-    return _store[track_id]
+    return _fake_solr["store"][track_id]
     
 """
     and these are the server-hosted versions of query, ingest and delete 

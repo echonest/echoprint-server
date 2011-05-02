@@ -46,36 +46,64 @@ def codegen(filename, start=10, duration=30):
         logger.debug("No JSON object came out of codegen: error was %s" % (errs))
         return None
 
+def get_winners(query_code_string, response, elbow=8):
+    actual = {}
+    original = {}
+    for x in response.results:
+        actual[x["track_id"]] = fp.actual_matches(query_code_string, x["fp"], elbow=elbow)
+        original[x["track_id"]] = int(x["score"])
 
+    sorted_actual_scores = sorted(actual.iteritems(), key=lambda (k,v): (v,k), reverse=True)
+    (actual_score_top_track_id, actual_score_top_score) = sorted_actual_scores[0]
+    sorted_original_scores = sorted(original.iteritems(), key=lambda (k,v): (v,k), reverse=True)
+    (original_score_top_track_id, original_score_top_score) = sorted_original_scores[0]
+    for x in sorted_actual_scores:
+        print "actual: %s %d" % (x[0], x[1])
+    for x in sorted_original_scores:
+        print "original: %s %d" % (x[0], x[1])
+        
+    return (actual_score_top_track_id, original_score_top_track_id)
+    
 
 def main():
     if not len(sys.argv)==3:
-        print "usage: python little_eval.py database_list query_list"
+        print "usage: python little_eval.py [database_list | disk] query_list"
         sys.exit()
         
     fp_codes = {}
-    database_list = open(sys.argv[1]).read().split("\n")
-    query_list = open(sys.argv[2]).read().split("\n")
-    for file in database_list:
-        print file
-        if len(fp_codes.keys()) > 10:
-            break
-        # TODO - use threaded codegen
-        j = codegen(file)
-        if len(j):
-            code_str = fp.decode_code_string(j[0]["code"])
-            fp_codes[file] = code_str
-    print "ingesting"
-    fp.ingest(fp_codes, local=True)
-    
-    for file in query_list:
-        print file
-        j = codegen(file)
-        if len(j):
-            r = fp.best_match_for_query(j[0]["code"], local=True)
-            print "For %s: %s %d (%s)" % (file, r.TRID, r.score, r.message())
-        
+    if sys.argv[1] == "disk":
+        fp.local_load("disk.pkl")
+    else:
+        database_list = open(sys.argv[1]).read().split("\n")
+        for line in database_list:
+            (track_id, file) = line.split(" ### ")
+            print track_id
+            # TODO - use threaded codegen
+            j = codegen(file, start=-1, duration=-1)
+            if len(j):
+                code_str = fp.decode_code_string(j[0]["code"])
+                fp_codes[track_id] = code_str
+        fp.ingest(fp_codes, local=True)
+        fp.local_save("disk.pkl")
 
+    counter = 0
+    actual_win = 0
+    original_win = 0
+    query_list = open(sys.argv[2]).read().split("\n")
+    for line in query_list:
+        (track_id, file) = line.split(" ### ")
+        print track_id
+        j = codegen(file)
+        if len(j):
+            counter+=1
+            response = fp.query_fp(fp.decode_code_string(j[0]["code"]), rows=20, local=True, get_data=True)
+            (winner_actual, winner_original) = get_winners(fp.decode_code_string(j[0]["code"]), response, elbow=8)
+            if(winner_actual == track_id):
+                actual_win+=1
+            if(winner_original == track_id):
+                original_win+=1
+    print "%d / %d actual (%2.2f%%) %d / %d original (%2.2f%%)" % (actual_win, counter, (float(actual_win)/float(counter))*100.0, original_win, counter, (float(original_win)/float(counter))*100.0)
+    
 if __name__ == '__main__':
     main()
 
