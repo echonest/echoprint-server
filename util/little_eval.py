@@ -66,15 +66,16 @@ def get_winners(query_code_string, response, elbow=8):
     
 
 def main():
-    if not len(sys.argv)==3:
-        print "usage: python little_eval.py [database_list | disk] query_list"
+    if not len(sys.argv)==4:
+        print "usage: python little_eval.py [database_list | disk] query_list [limit]"
         sys.exit()
         
     fp_codes = {}
+    limit = int(sys.argv[3])
     if sys.argv[1] == "disk":
         fp.local_load("disk.pkl")
     else:
-        database_list = open(sys.argv[1]).read().split("\n")
+        database_list = open(sys.argv[1]).read().split("\n")[0:limit]
         for line in database_list:
             (track_id, file) = line.split(" ### ")
             print track_id
@@ -89,7 +90,8 @@ def main():
     counter = 0
     actual_win = 0
     original_win = 0
-    query_list = open(sys.argv[2]).read().split("\n")
+    bm_win = 0
+    query_list = open(sys.argv[2]).read().split("\n")[0:limit]
     for line in query_list:
         (track_id, file) = line.split(" ### ")
         print track_id
@@ -98,11 +100,16 @@ def main():
             counter+=1
             response = fp.query_fp(fp.decode_code_string(j[0]["code"]), rows=20, local=True, get_data=True)
             (winner_actual, winner_original) = get_winners(fp.decode_code_string(j[0]["code"]), response, elbow=8)
+            response = fp.best_match_for_query(j[0]["code"], local=True)
+            if(response.TRID == track_id):
+                bm_win+=1
             if(winner_actual == track_id):
                 actual_win+=1
             if(winner_original == track_id):
                 original_win+=1
-    print "%d / %d actual (%2.2f%%) %d / %d original (%2.2f%%)" % (actual_win, counter, (float(actual_win)/float(counter))*100.0, original_win, counter, (float(original_win)/float(counter))*100.0)
+    print "%d / %d actual (%2.2f%%) %d / %d original (%2.2f%%) %d / %d bm (%2.2f%%)" % (actual_win, counter, (float(actual_win)/float(counter))*100.0, \
+        original_win, counter, (float(original_win)/float(counter))*100.0, \
+        bm_win, counter, (float(bm_win)/float(counter))*100.0)
     
 if __name__ == '__main__':
     main()

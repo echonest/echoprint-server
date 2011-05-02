@@ -57,7 +57,7 @@ class Response(object):
 def inflate_code_string(s):
     """ Takes an uncompressed code string consisting of 0-padded fixed-width
         sorted hex and converts it to the standard code string."""
-    n = int(len(s) / 9.0) # 4 bytes for hash, 5 bytes for time
+    n = int(len(s) / 13.0) # 8 bytes for hash, 5 bytes for time
 
     def pairs(l, n=2):
         """Non-overlapping [1,2,3,4] -> [(1,2), (3,4)]"""
@@ -73,7 +73,7 @@ def inflate_code_string(s):
     # Parse out n groups of 5 timestamps in hex; then n groups of 8 hash codes in hex.
     end_timestamps = n*5
     times = [int(''.join(t), 16) for t in pairs(s[:end_timestamps], 5)]
-    codes = [int(''.join(t), 16) for t in pairs(s[end_timestamps:], 4)]
+    codes = [int(''.join(t), 16) for t in pairs(s[end_timestamps:], 8)]
 
     assert(len(times) == len(codes)) # these should match up!
     return ' '.join('%d %d' % (c, t) for c,t in zip(codes, times))
@@ -117,8 +117,6 @@ def best_match_for_query(code_string, elbow=8, local=False):
     # Query the FP flat directly.
     response = query_fp(code_string, rows=10, local=local, get_data=True)
     logger.debug("solr qtime is %d" % (response.header["QTime"]))
-    
-    _debug_print_response(code_string, response, elbow=elbow)
     
     if len(response.results) == 0:
         return Response(Response.NO_RESULTS, qtime=response.header["QTime"], tic=tic)
