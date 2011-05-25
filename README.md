@@ -1,6 +1,6 @@
 # Server components for Echoprint.
 
-## What is included ==
+## What is included
 
 The Echoprint server is a custom component for Apache Solr to store and index Echoprint codes and hash times. We also include the python API layer code necessary to match tracks based on the response from the custom component as well as a demo (non-production) API meant to illustrate how to setup and run the Echoprint service.
 
@@ -38,7 +38,7 @@ If you run this server somewhere else other than localhost, update the pointer t
     _fp_solr = solr.SolrConnection("http://localhost:8502/solr/fp")
 
 
-## Running in Python ==
+## Running in Python
 
 fp.py has all the methods you'll need.
 
@@ -65,6 +65,7 @@ fp.py has all the methods you'll need.
 2. Ingest codes with http://localhost:8080/ingest:
 
 POST the following variables:
+
     fp_code : packed code from codegen
     track_id : if you want your own track_ids. If you don't give one we'll generate one.
 
@@ -75,6 +76,7 @@ For example:
 3. Query with http://localhost:8080/query?fp_code=XXX
 
 POST or GET the following:
+
     fp_code : packed code from codegen
 
 
