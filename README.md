@@ -84,7 +84,7 @@ POST or GET the following:
 
 * This version both indexes and stores FP data in solr. This is for ease of installation and so that we don't require another datastore booted in order to get going. In practice it is necessary to use a key-value or other fast random access store for large catalogs. If you do this, change schema.xml to not store the "fp" field (keep it indexed):
 
-    <field name="fp" type="fphash" indexed="true" stored="false" required="true"/>
+        <field name="fp" type="fphash" indexed="true" stored="false" required="true"/>
 
 Then override fp.py's fp_code_for_track_id method with your own datastore accessor.
 
