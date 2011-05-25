@@ -1,5 +1,9 @@
 # Server components for Echoprint.
 
+**Please note: this is not the final version and will likely not store codes that match release Echoprint codes.**
+
+Echoprint is an open source music fingerprint and resolving framework powered by the [The Echo Nest](http://the.echonest.com/ "The Echo Nest"). The [code generator](http://github.com/echonest/echoprint-codegen "echoprint-codegen") (library to convert PCM samples from a microphone or file into Echoprint codes) is MIT licensed and free for any use. The [server component](http://github.com/echonest/echoprint-server "echoprint-server") that stores and resolves queries is Apache licensed and free for any use. The [data for resolving to millions of songs](http://echoprint.me/data "Echoprint Data") is free for any use provided any changes or additions are merged back to the community. 
+
 ## What is included
 
 The Echoprint server is a custom component for Apache Solr to store and index Echoprint codes and hash times. We also include the python API layer code necessary to match tracks based on the response from the custom component as well as a demo (non-production) API meant to illustrate how to setup and run the Echoprint service.
@@ -84,7 +88,7 @@ POST or GET the following:
 
 * This version both indexes and stores FP data in solr. This is for ease of installation and so that we don't require another datastore booted in order to get going. In practice it is necessary to use a key-value or other fast random access store for large catalogs. If you do this, change schema.xml to not store the "fp" field (keep it indexed):
 
-    <field name="fp" type="fphash" indexed="true" stored="false" required="true"/>
+        <field name="fp" type="fphash" indexed="true" stored="false" required="true"/>
 
 Then override fp.py's fp_code_for_track_id method with your own datastore accessor.
 
