@@ -13,6 +13,7 @@ import logging
 import fileinput
 import subprocess
 import json
+import tempfile
 
 sys.path.append('../API')
 import fp
@@ -25,6 +26,8 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 _codegen_path = "../../echoprint-codegen/codegen.Darwin-i386"
+
+MUNGE = False
 
 
 def codegen(filename, start=10, duration=30):
@@ -45,6 +48,15 @@ def codegen(filename, start=10, duration=30):
     except ValueError:
         logger.debug("No JSON object came out of codegen: error was %s" % (errs))
         return None
+
+def munge(file):
+    if not Munge:
+        return file
+    (fhandle, outname) = tempfile.mkstemp('.mp3')
+    os.close(fhandle)
+    cmd = "mpg123 -q -w " + outname + " \"" + file + "\""
+    os.system(cmd)
+    return outname
 
 def get_winners(query_code_string, response, elbow=8):
     actual = {}
@@ -95,7 +107,7 @@ def main():
     for line in query_list:
         (track_id, file) = line.split(" ### ")
         print track_id
-        j = codegen(file)
+        j = codegen(munge(file))
         if len(j):
             counter+=1
             response = fp.query_fp(fp.decode_code_string(j[0]["code"]), rows=20, local=True, get_data=True)
