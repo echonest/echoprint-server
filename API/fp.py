@@ -150,18 +150,27 @@ def best_match_for_query(code_string, elbow=10, local=False):
     variance = variance / (len(scores))
     std = math.sqrt(variance)
     
-    top_score = sorted_actual_scores[0][1]
-    if top_score > mean + std:
-        logger.debug("top score %d, mean %d, std %d" % (top_score, mean, std))
-        return Response(Response.MULTIPLE_GOOD_MATCH, TRID=sorted_actual_scores[0][0], score=int(top_score), qtime=response.header["QTime"], tic=tic)
+    score = None
+    top_track = None
+
+    if len(sorted_actual_scores) > 0:
+        top_score = sorted_actual_scores[0][1]
+        if top_score > mean + std:
+            # We have a score that looks like it's pretty high. Check that the number of ordered codes
+            # is close to the real number of codes (over 25%)
+            trid = sorted_actual_scores[0][0]
+            oscore = float(original_scores[trid])
+            if float(top_score) / oscore >= 0.25:
+                top_track = trid
+                score = top_score
+                logger.debug("top score %d, mean %d, std %d" % (top_score, mean, std))
+
+    if top_track is not None:
+        return Response(Response.MULTIPLE_GOOD_MATCH, TRID=top_track, score=int(score), qtime=response.header["QTime"], tic=tic)
     else:
         return Response(Response.MULTIPLE_BAD_HISTOGRAM_MATCH, qtime=response.header["QTime"], tic=tic)
-    
-    # If no outlier, then no match
 
-        
-
-def actual_matches(code_string_query, code_string_match, slop = 2, elbow = 10):
+def actual_matches(code_string_query, code_string_match, slop = 1, elbow = 10):
     code_query = code_string_query.split(" ")
     code_match = code_string_match.split(" ")
     if (len(code_match) < (elbow*2)):
