@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 _codegen_path = "../../echoprint-codegen/codegen.Darwin-i386"
 
-MUNGE = False
+MUNGE = False 
 
 
 def codegen(filename, start=10, duration=30):
@@ -50,7 +50,7 @@ def codegen(filename, start=10, duration=30):
         return None
 
 def munge(file):
-    if not Munge:
+    if not MUNGE:
         return file
     (fhandle, outname) = tempfile.mkstemp('.mp3')
     os.close(fhandle)
@@ -110,7 +110,7 @@ def main():
         j = codegen(munge(file))
         if len(j):
             counter+=1
-            response = fp.query_fp(fp.decode_code_string(j[0]["code"]), rows=20, local=True, get_data=True)
+            response = fp.query_fp(fp.decode_code_string(j[0]["code"]), rows=30, local=True, get_data=True)
             (winner_actual, winner_original) = get_winners(fp.decode_code_string(j[0]["code"]), response, elbow=8)
             response = fp.best_match_for_query(j[0]["code"], local=True)
             if(response.TRID == track_id):
