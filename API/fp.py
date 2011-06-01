@@ -251,6 +251,23 @@ def local_ingest(code_string_dict):
         for k in keys:
             _fake_solr["index"].setdefault(k,[]).append(track)
 
+def local_delete(tracks):
+    for track in tracks:
+        codes = set(_fake_solr["store"][track].split(" ")[0::2])
+        del _fake_solr["store"][track]
+        for code in codes:
+            _fake_solr["index"][code].remove(track)
+            if len(_fake_solr["index"][code]) == 0:
+                del _fake_solr["index"][code]
+
+def local_dump():
+    print "Stored tracks:"
+    for t in _fake_solr["store"].keys():
+        print t
+    print "Keys:"
+    for k in _fake_solr["index"].keys():
+        print "%s -> %s" % (k, ", ".join(_fake_solr["index"][k]))
+
 def local_query_fp(code_string,rows=10,get_data=False):
     keys = code_string.split(" ")[0::2]
     track_hist = []
