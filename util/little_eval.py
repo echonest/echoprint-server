@@ -82,7 +82,7 @@ def main():
         print "usage: python little_eval.py [database_list | disk] query_list [limit]"
         sys.exit()
         
-    fp_codes = {}
+    fp_codes = []
     limit = int(sys.argv[3])
     if sys.argv[1] == "disk":
         fp.local_load("disk.pkl")
@@ -95,7 +95,12 @@ def main():
             j = codegen(file, start=-1, duration=-1)
             if len(j):
                 code_str = fp.decode_code_string(j[0]["code"])
-                fp_codes[track_id] = code_str
+                meta = j[0]["metadata"]
+                l = meta["duration"] * 1000
+                a = meta["artist"]
+                r = meta["release"]
+                t = meta["title"]
+                fp_codes.append({"track_id": track_id, "fp": code_str, "length": str(l), "artist": a, "release": r, "track": t})
         fp.ingest(fp_codes, local=True)
         fp.local_save("disk.pkl")
 
