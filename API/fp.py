@@ -225,7 +225,7 @@ def actual_matches(code_string_query, code_string_match, slop = 1, elbow = 10):
     NB: delete is not supported locally yet
     
 """
-_fake_solr = {"index": {}, "store": {}}
+_fake_solr = {"index": {}, "store": {}, "metadata": {}}
 
 class FakeSolrResponse(object):
     def __init__(self, results):
@@ -234,7 +234,13 @@ class FakeSolrResponse(object):
         for r in results:
             # If the result list has more than 2 elements we've asked for data as well
             if len(r) > 2:
-                self.results.append({"score":r[1], "track_id":r[0], "fp":r[2]})
+                data = {"score":r[1], "track_id":r[0], "fp":r[2]}
+                metadata = r[3]
+                data["length"] = metadata["length"]
+                for m in ["artist", "release", "track"]:
+                    if m in metadata:
+                        data[m] = metadata[m]
+                self.results.append(data)
             else:
                 self.results.append({"score":r[1], "track_id":r[0]})
     
@@ -253,12 +259,20 @@ def local_save(filename):
     disk.close()
     print "Done"
     
-def local_ingest(code_string_dict):
-    for track in code_string_dict.keys():
-        _fake_solr["store"][track] = code_string_dict[track]
-        keys = set(code_string_dict[track].split(" ")[0::2]) # just one code indexed
+def local_ingest(fingerprint_list):
+    for fprint in fingerprint_list:
+        trackid = fprint["track_id"]
+        _fake_solr["store"][trackid] = fprint["fp"]
+        keys = set(fprint["fp"].split(" ")[0::2]) # just one code indexed
         for k in keys:
-            _fake_solr["index"].setdefault(k,[]).append(track)
+            _fake_solr["index"].setdefault(k,[]).append(trackid)
+        _fake_solr["metadata"][trackid] = {"length": fprint["length"]}
+        if "artist" in fprint:
+            _fake_solr["metadata"][trackid]["artist"] = fprint["artist"]
+        if "release" in fprint:
+            _fake_solr["metadata"][trackid]["release"] = fprint["release"]
+        if "track" in fprint:
+            _fake_solr["metadata"][trackid]["track"] = fprint["track"]
 
 def local_delete(tracks):
     for track in tracks:
@@ -268,11 +282,12 @@ def local_delete(tracks):
             _fake_solr["index"][code].remove(track)
             if len(_fake_solr["index"][code]) == 0:
                 del _fake_solr["index"][code]
+        del _fake_solr["metadata"][trackid]
 
 def local_dump():
     print "Stored tracks:"
     for t in _fake_solr["store"].keys():
-        print t
+        print t, _fake_solr["metadata"][t]
     print "Keys:"
     for k in _fake_solr["index"].keys():
         print "%s -> %s" % (k, ", ".join(_fake_solr["index"][k]))
@@ -292,8 +307,10 @@ def local_query_fp(code_string,rows=10,get_data=False):
         # Make a list of lists that have track_id, score, then fp
         lol = sorted(top_matches.iteritems(), key=lambda (k,v): (v,k), reverse=True)[0:rows]
         lol = map(list, lol)
+        
         for x in lol:
             x.append(_fake_solr["store"][x[0]])
+            x.append(_fake_solr["metadata"][x[0]])
         return FakeSolrResponse(lol)
 
 def local_fp_code_for_track_id(track_id):
