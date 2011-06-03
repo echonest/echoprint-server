@@ -318,14 +318,23 @@ def delete(track_ids, do_commit=True, local=False):
         commit()
 
     
-def ingest(code_string_dict, do_commit=True, local=False):
-    # ingest doc into fp flat. input is a dict like {"TR12345":"10 1230 19 10203 123 40240", "TR12346":"10 1938 1928 4393 2032"}
+def ingest(fingerprint_list, do_commit=True, local=False):
+    """ Ingest some fingerprints into the fingerprint database.
+        The fingerprints should be of the form {"track_id": id, "fp": fp, "artist": artist, "release": release, "track": track, "length": length}
+        or a list of the same.
+        artist, release and track are not required but highly recommended.
+        length is the length of the track being ingested in milliseconds
+        if track_id is empty, one will be generated.
+    """
+    if not isinstance(fingerprint_list, list):
+        fingerprint_list = [fingerprint_list]
+
     if local:
-        return local_ingest(code_string_dict)
+        return local_ingest(fingerprint_list)
 
     docs = []
-    for t in code_string_dict.keys():        
-        docs.append({"track_id":t, "fp":code_string_dict[t]})
+    for fprint in fingerprint_list:
+        docs.append(fprint)
 
     with solr.pooled_connection(_fp_solr) as host:
         host.add_many(docs)
@@ -344,11 +353,11 @@ def query_fp(code_string, rows=15, local=False, get_data=False):
     try:
         # query the fp flat
         if get_data:
-            with solr.pooled_connection(_fp_solr) as host:
-                resp = host.query(code_string, qt="/hashq", rows=rows, fields="track_id,fp")
+            fields = "track_id,artist,release,track,length"
         else:
-            with solr.pooled_connection(_fp_solr) as host:
-                resp = host.query(code_string, qt="/hashq", rows=rows, fields="track_id")
+            fields = "track_id"
+        with solr.pooled_connection(_fp_solr) as host:
+            resp = host.query(code_string, qt="/hashq", rows=rows, fields=fields)
         return resp
     except solr.SolrException:
         return None

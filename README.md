@@ -72,10 +72,14 @@ POST the following variables:
 
     fp_code : packed code from codegen
     track_id : if you want your own track_ids. If you don't give one we'll generate one.
+    length : the length of the track in ms
+    artist : the artist of the track (optional)
+    release : the release of the track (optional)
+    track : the track name (optional)
 
 For example:
 
-    curl http://localhost:8080/ingest -d "fp_code=eJx1W...&track_id=thisone"
+    curl http://localhost:8080/ingest -d "fp_code=eJx1W...&track_id=thisone&length=30000"
 
 3. Query with http://localhost:8080/query?fp_code=XXX
 

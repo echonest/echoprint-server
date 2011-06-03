@@ -29,21 +29,31 @@ urls = (
 
 class ingest:
     def POST(self):
-        stuff = web.input(track_id="default",fp_code="")
-        if stuff.track_id == "default":
+        params = web.input(track_id="default", fp_code="", artist="", release="", track="", length=None)
+        if params.track_id == "default":
             track_id = fp.new_track_id()
         else:
-            track_id = stuff.track_id
+            track_id = params.track_id
+        if params.length is None:
+            return web.webapi.BadRequest()
         
         # First see if this is a compressed code
-        if re.match('[A-Za-z\/\+\_\-]', stuff.fp_code) is not None:
-           code_string = fp.decode_code_string(stuff.fp_code)
+        if re.match('[A-Za-z\/\+\_\-]', params.fp_code) is not None:
+           code_string = fp.decode_code_string(params.fp_code)
            if code_string is None:
-               return json.dumps({"track_id":track_id, "ok":False, "error":"cannot decode code string %s" % stuff.fp_code})
+               return json.dumps({"track_id":track_id, "ok":False, "error":"cannot decode code string %s" % params.fp_code})
+        else:
+            code_string = params.fp_code
 
-        fp.ingest({track_id:code_string}, do_commit=True, local=False)
+        fp.ingest({"track_id": track_id, 
+                    "fp": code_string,
+                    "length": params.length,
+                    "artist": params.artist,
+                    "release": params.release,
+                    "track": params.track
+                    }, do_commit=True, local=False)
 
-        return json.dumps({"track_id":track_id, "ok":True})
+        return json.dumps({"track_id":track_id, "status":"ok"})
         
     
 class query:
