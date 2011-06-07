@@ -138,39 +138,32 @@ def best_match_for_query(code_string, elbow=10, local=False):
         original_scores[r["track_id"]] = int(r["score"])
         actual_scores[r["track_id"]] = actual_matches(code_string, r["fp"], elbow = elbow)
     
+    #logger.debug("Actual score for %s is %d (code_len %d), original was %d" % (r["track_id"], actual_scores[r["track_id"]], code_len, top_match_score))
     # Sort the actual scores
     sorted_actual_scores = sorted(actual_scores.iteritems(), key=lambda (k,v): (v,k), reverse=True)
+    # Get the top one
+    (actual_score_top_track_id, actual_score_top_score) = sorted_actual_scores[0]
+    # Get the 2nd top one (we know there is always at least 2 matches)
+    (actual_score_2nd_track_id, actual_score_2nd_score) = sorted_actual_scores[1]
 
-    # Find if the highest is an outlier (then it's a match) - >1 SD higher than the mean
-    scores = [s for (tr, s) in sorted_actual_scores]
-    
-    sum_scores = sum(scores)
-    mean = float(sum_scores) / float(len(scores))
-    variance = 0.0
-    for s in scores:
-        variance = variance + (s - mean) * (s - mean)
-    variance = variance / (len(scores))
-    std = math.sqrt(variance)
-    
-    score = None
-    top_track = None
-
-    if len(sorted_actual_scores) > 0:
-        top_score = sorted_actual_scores[0][1]
-        if top_score > mean + std:
-            # We have a score that looks like it's pretty high. Check that the number of ordered codes
-            # is close to the real number of codes (over 25%)
-            trid = sorted_actual_scores[0][0]
-            oscore = float(original_scores[trid])
-            if float(top_score) / oscore >= 0.25:
-                top_track = trid
-                score = top_score
-                logger.debug("top score %d, mean %d, std %d" % (top_score, mean, std))
-
-    if top_track is not None:
-        return Response(Response.MULTIPLE_GOOD_MATCH, TRID=top_track, score=int(score), qtime=response.header["QTime"], tic=tic)
+    # If the top actual score is greater than the minimum (elbow) then ...
+    if actual_score_top_score >= elbow:
+        # Check if the actual score is greater than its fast score. if it is, it is certainly a match.
+        if actual_score_top_score > original_scores[actual_score_top_track_id]:
+            return Response(Response.MULTIPLE_GOOD_MATCH_HISTOGRAM_INCREASED, TRID=actual_score_top_track_id, score=actual_score_top_score, qtime=response.header["QTime"], tic=tic)
+        else:
+            # If the actual score went down it still could be close enough, so check for that
+            if original_scores[actual_score_top_track_id] - actual_score_top_score <= (actual_score_top_score / 2):
+                return Response(Response.MULTIPLE_GOOD_MATCH_HISTOGRAM_DECREASED, TRID=actual_score_top_track_id, score=actual_score_top_score, qtime=response.header["QTime"], tic=tic)
+            else:
+                # If the actual score was not close enough, then no match.
+                return Response(Response.MULTIPLE_BAD_HISTOGRAM_MATCH, qtime=response.header["QTime"], tic=tic)
     else:
-        return Response(Response.MULTIPLE_BAD_HISTOGRAM_MATCH, qtime=response.header["QTime"], tic=tic)
+        # last ditch. if the 2nd top actual score is much less than the top score let it through.
+        if (actual_score_top_score >= elbow/2) and ((actual_score_top_score - actual_score_2nd_score) >= (actual_score_top_score / 2)):  # for examples [10,4], 10-4 = 6, which >= 5, so OK
+            return Response(Response.MULTIPLE_GOOD_MATCH_HISTOGRAM_DECREASED, TRID=actual_score_top_track_id, score=actual_score_top_score, qtime=response.header["QTime"], tic=tic)
+        else:
+            return Response(Response.MULTIPLE_BAD_HISTOGRAM_MATCH, qtime = response.header["QTime"], tic=tic)
 
 def actual_matches(code_string_query, code_string_match, slop = 2, elbow = 10):
     code_query = code_string_query.split(" ")
