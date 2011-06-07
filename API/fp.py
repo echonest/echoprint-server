@@ -83,6 +83,8 @@ def inflate_code_string(s):
 
 def decode_code_string(compressed_code_string):
     compressed_code_string = compressed_code_string.encode('utf8')
+    if compressed_code_string == "":
+        return ""
     # do the zlib/base64 stuff
     try:
         # this will decode both URL safe b64 and non-url-safe
@@ -170,13 +172,12 @@ def best_match_for_query(code_string, elbow=10, local=False):
     else:
         return Response(Response.MULTIPLE_BAD_HISTOGRAM_MATCH, qtime=response.header["QTime"], tic=tic)
 
-def actual_matches(code_string_query, code_string_match, slop = 1, elbow = 10):
+def actual_matches(code_string_query, code_string_match, slop = 2, elbow = 10):
     code_query = code_string_query.split(" ")
     code_match = code_string_match.split(" ")
     if (len(code_match) < (elbow*2)):
         return 0
 
-    slop = 32 * slop
     time_diffs = {}
 
     #
