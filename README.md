@@ -6,13 +6,14 @@ Echoprint is an open source music fingerprint and resolving framework powered by
 
 ## What is included
 
-The Echoprint server is a custom component for Apache Solr to store and index Echoprint codes and hash times. We also include the python API layer code necessary to match tracks based on the response from the custom component as well as a demo (non-production) API meant to illustrate how to setup and run the Echoprint service.
+The Echoprint server is a custom component for Apache Solr to index Echoprint codes and hash times. In order to keep the index fast, the Echoprint codes are stored in a Tokyo Tyrant key/value store. We also include the python API layer code necessary to match tracks based on the response from the custom component as well as a demo (non-production) API meant to illustrate how to setup and run the Echoprint service.
 
 Non-included requirements for the server (newota):
 
 * java 1.6
 * python 2.5 or higher
 * simplejson (if python < 2.6)
+* [Tokyo Tyrant](http://fallabs.com/tokyotyrant/)
 
 Additional non-included requirements for the demo:
 
@@ -35,12 +36,17 @@ Additional non-included requirements for the demo:
 
 1. Start the server like this (change your home directory to where you have echoprint-server/solr/solr)
 
-    java -Dsolr.solr.home=/Users/bwhitman/outside/echoprint-server/solr/solr/solr/ -Djava.awt.headless=true -jar start.jar
+        java -Dsolr.solr.home=/Users/bwhitman/outside/echoprint-server/solr/solr/solr/ -Djava.awt.headless=true -jar start.jar
 
-If you run this server somewhere else other than localhost, update the pointer to it in fp.py:
+    If you run this server somewhere else other than localhost, update the pointer to it in fp.py:
 
-    _fp_solr = solr.SolrConnection("http://localhost:8502/solr/fp")
+        _fp_solr = solr.SolrConnection("http://localhost:8502/solr/fp")
 
+2. Start the Tokyo Tyrant server.
+
+    Again, if the location of the TT server differs, update fp.py:
+
+        _tyrant_address = ['localhost', 1978]
 
 ## Running in Python
 
@@ -89,12 +95,6 @@ POST or GET the following:
 
 
 ## Notes
-
-* This version both indexes and stores FP data in solr. This is for ease of installation and so that we don't require another datastore booted in order to get going. In practice it is necessary to use a key-value or other fast random access store for large catalogs. If you do this, change schema.xml to not store the "fp" field (keep it indexed):
-
-        <field name="fp" type="fphash" indexed="true" stored="false" required="true"/>
-
-Then override fp.py's fp_code_for_track_id method with your own datastore accessor.
 
 * You can run Echoprint in "local" mode which uses a python dict to store and index codes instead of Solr. You can store and index about 100K tracks in 1GB or so in practice using this mode. This is only useful for small scale testing. Each fp.py method takes an optional "local" kwarg.
 

@@ -12,6 +12,7 @@ import solr
 import pickle
 from collections import defaultdict
 import zlib, base64, re, time, random, string, math
+import pytyrant
 
 try:
     import json
@@ -21,7 +22,8 @@ except ImportError:
 _fp_solr = solr.SolrConnectionPool("http://localhost:8502/solr/fp")
 _hexpoch = int(time.time() * 1000)
 logger = logging.getLogger(__name__)
-
+_tyrant_address = ['localhost', 1978]
+_tyrant = None
 
 class Response(object):
     # Response codes
@@ -133,10 +135,15 @@ def best_match_for_query(code_string, elbow=10, local=False):
     original_scores = {}
     actual_scores = {}
     
+    trackids = [r["track_id"].encode("utf8") for r in response.results]
+    tcodes = get_tyrant().multi_get(trackids)
+    
     # For each result compute the "actual score" (based on the histogram matching)
-    for r in response.results:
-        original_scores[r["track_id"]] = int(r["score"])
-        actual_scores[r["track_id"]] = actual_matches(code_string, r["fp"], elbow = elbow)
+    for (i, r) in enumerate(response.results):
+        track_id = r["track_id"]
+        original_scores[track_id] = int(r["score"])
+        track_code = tcodes[i]
+        actual_scores[track_id] = actual_matches(code_string, track_code, elbow = elbow)
     
     #logger.debug("Actual score for %s is %d (code_len %d), original was %d" % (r["track_id"], actual_scores[r["track_id"]], code_len, top_match_score))
     # Sort the actual scores
@@ -209,6 +216,12 @@ def actual_matches(code_string_query, code_string_match, slop = 2, elbow = 10):
     if(len(actual_match_list)>0):
         return actual_match_list[0][1]
     return 0        
+
+def get_tyrant():
+    global _tyrant
+    if _tyrant is None:
+        _tyrant = pytyrant.PyTyrant.open(*_tyrant_address)
+    return _tyrant
 
 """
     fp can query the live production flat or the alt flat, or it can query and ingest in memory.
@@ -321,17 +334,24 @@ def delete(track_ids, do_commit=True, local=False):
 
     # delete a code from FP flat
     if local:
-        print "not implemented yet"
-        return
+        return local_delete(track_ids)
+
     with solr.pooled_connection(_fp_solr) as host:
         host.delete_many(track_ids)
+    
+    try:
+        get_tyrant().multi_del(track_ids)
+    except KeyError:
+        pass
+    
     if do_commit:
         commit()
 
     
 def ingest(fingerprint_list, do_commit=True, local=False):
     """ Ingest some fingerprints into the fingerprint database.
-        The fingerprints should be of the form {"track_id": id, "fp": fp, "artist": artist, "release": release, "track": track, "length": length}
+        The fingerprints should be of the form
+          {"track_id": id, "fp": fp, "artist": artist, "release": release, "track": track, "length": length, "version": "codever"}
         or a list of the same.
         artist, release and track are not required but highly recommended.
         length is the length of the track being ingested in milliseconds
@@ -344,11 +364,15 @@ def ingest(fingerprint_list, do_commit=True, local=False):
         return local_ingest(fingerprint_list)
 
     docs = []
+    codes = []
     for fprint in fingerprint_list:
         docs.append(fprint)
+        codes.append((fprint["track_id"], fprint["fp"]))
 
     with solr.pooled_connection(_fp_solr) as host:
         host.add_many(docs)
+
+    get_tyrant().multi_set(codes)
 
     if do_commit:
         commit()

@@ -22,12 +22,13 @@
     <field name="track_id" type="string" indexed="true" stored="true" required="true"/>
 
     <!-- The hashes associated with a track, which is our default search field -->
-    <field name="fp" type="fphash" indexed="true" stored="true" required="true"/>
+    <field name="fp" type="fphash" indexed="true" stored="false" required="true"/>
     
     <field name="artist" type="string" indexed="true" stored="true" required="false"/>
     <field name="release" type="string" indexed="true" stored="true" required="false"/>
     <field name="track" type="string" indexed="true" stored="true" required="false"/>
     <field name="length" type="int" indexed="true" stored="true" required="true"/>
+    <field name="codever" type="string" indexed="true" stored="true" required="true"/>
 
   </fields>
 
