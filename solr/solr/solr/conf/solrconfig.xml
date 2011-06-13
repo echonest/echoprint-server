@@ -72,7 +72,7 @@
       flushed to the Directory.  -->
     <ramBufferSizeMB>32</ramBufferSizeMB>
     <!-- <maxMergeDocs>2147483647</maxMergeDocs> -->
-    <maxFieldLength>10000</maxFieldLength>
+    <maxFieldLength>50000</maxFieldLength>
     <writeLockTimeout>1000</writeLockTimeout>
     <commitLockTimeout>10000</commitLockTimeout>
 
