@@ -100,7 +100,8 @@ def main():
                 a = meta["artist"]
                 r = meta["release"]
                 t = meta["title"]
-                fp_codes.append({"track_id": track_id, "fp": code_str, "length": str(l), "artist": a, "release": r, "track": t})
+                v = meta["version"]
+                fp_codes.append({"track_id": track_id, "fp": code_str, "length": str(l), "codever": str(round(v, 2)), "artist": a, "release": r, "track": t})
         fp.ingest(fp_codes, local=True)
         fp.local_save("disk.pkl")
 
@@ -117,6 +118,8 @@ def main():
             counter+=1
             response = fp.query_fp(fp.decode_code_string(j[0]["code"]), rows=30, local=True, get_data=True)
             (winner_actual, winner_original) = get_winners(fp.decode_code_string(j[0]["code"]), response, elbow=8)
+            winner_actual = winner_actual.split("-")[0]
+            winner_original = winner_original.split("-")[0]
             response = fp.best_match_for_query(j[0]["code"], local=True)
             if(response.TRID == track_id):
                 bm_win+=1

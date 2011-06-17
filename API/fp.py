@@ -351,7 +351,8 @@ def local_query_fp(code_string,rows=10,get_data=False):
         lol = map(list, lol)
         
         for x in lol:
-            x.append(_fake_solr["store"][x[0]])
+            trackid = x[0].split("-")[0]
+            x.append(_fake_solr["store"][trackid])
             x.append(_fake_solr["metadata"][x[0]])
         return FakeSolrResponse(lol)
 
