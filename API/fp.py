@@ -126,10 +126,25 @@ def best_match_for_query(code_string, elbow=10, local=False):
     # If we just had one result, make sure that it is close enough. We rarely if ever have a single match so this is not helpful (and probably doesn't work well.)
     top_match_score = int(response.results[0]["score"])
     if len(response.results) == 1:
+        trackid = response.results[0]["track_id"]
+        trackid = trackid.split("-")[0] # will work even if no `-` in trid
         if code_len - top_match_score < elbow:
-            return Response(Response.SINGLE_GOOD_MATCH, TRID=response.results[0]["track_id"], score=top_match_score, qtime=response.header["QTime"], tic=tic)
+            return Response(Response.SINGLE_GOOD_MATCH, TRID=trackid, score=top_match_score, qtime=response.header["QTime"], tic=tic)
         else:
             return Response(Response.SINGLE_BAD_MATCH, qtime=response.header["QTime"], tic=tic)
+
+    # If the scores are really low (less than 10% of the query length) then say no results
+    if top_match_score < code_len * 0.1:
+        return Response(Response.MULTIPLE_BAD_HISTOGRAM_MATCH, qtime = response.header["QTime"], tic=tic)
+
+    # OK, there are at least two matches (we almost always are in this case.)
+    # Check if the delta between the top match and the 2nd top match is within elbow.
+    if top_match_score - int(response.results[1]["score"]) >= elbow:
+        # There was a strong match, the first one.
+        trackid = response.results[0]["track_id"].split("-")[0]
+        return Response(Response.MULTIPLE_GOOD_MATCH, TRID=trackid, score=int(response.results[0]["score"]), qtime=response.header["QTime"], tic=tic)
+
+    # Not a strong match, so we look up the codes in the keystore and compute actual matches...
 
     # Get the actual score for all responses
     original_scores = {}
@@ -157,18 +172,25 @@ def best_match_for_query(code_string, elbow=10, local=False):
     if actual_score_top_score >= elbow:
         # Check if the actual score is greater than its fast score. if it is, it is certainly a match.
         if actual_score_top_score > original_scores[actual_score_top_track_id]:
-            return Response(Response.MULTIPLE_GOOD_MATCH_HISTOGRAM_INCREASED, TRID=actual_score_top_track_id, score=actual_score_top_score, qtime=response.header["QTime"], tic=tic)
+            trid = actual_score_top_track_id.split("-")[0]
+            return Response(Response.MULTIPLE_GOOD_MATCH_HISTOGRAM_INCREASED, TRID=trid, score=actual_score_top_score, qtime=response.header["QTime"], tic=tic)
         else:
             # If the actual score went down it still could be close enough, so check for that
+            # If the actual score went down it still could be close enough, so check for that
             if original_scores[actual_score_top_track_id] - actual_score_top_score <= (actual_score_top_score / 2):
-                return Response(Response.MULTIPLE_GOOD_MATCH_HISTOGRAM_DECREASED, TRID=actual_score_top_track_id, score=actual_score_top_score, qtime=response.header["QTime"], tic=tic)
+                if (actual_score_top_score >= elbow/2) and ((actual_score_top_score - actual_score_2nd_score) >= (actual_score_top_score / 2)):  # for examples [10,4], 10-4 = 6, which >= 5, so OK
+                    trid = actual_score_top_track_id.split("-")[0]
+                    return Response(Response.MULTIPLE_GOOD_MATCH_HISTOGRAM_DECREASED, TRID=trid, score=actual_score_top_score, qtime=response.header["QTime"], tic=tic)
+                else:
+                    return Response(Response.MULTIPLE_BAD_HISTOGRAM_MATCH, qtime = response.header["QTime"], tic=tic)
             else:
                 # If the actual score was not close enough, then no match.
                 return Response(Response.MULTIPLE_BAD_HISTOGRAM_MATCH, qtime=response.header["QTime"], tic=tic)
     else:
         # last ditch. if the 2nd top actual score is much less than the top score let it through.
         if (actual_score_top_score >= elbow/2) and ((actual_score_top_score - actual_score_2nd_score) >= (actual_score_top_score / 2)):  # for examples [10,4], 10-4 = 6, which >= 5, so OK
-            return Response(Response.MULTIPLE_GOOD_MATCH_HISTOGRAM_DECREASED, TRID=actual_score_top_track_id, score=actual_score_top_score, qtime=response.header["QTime"], tic=tic)
+            trid = actual_score_top_track_id.split("-")[0]
+            return Response(Response.MULTIPLE_GOOD_MATCH_HISTOGRAM_DECREASED, TRID=trid, score=actual_score_top_score, qtime=response.header["QTime"], tic=tic)
         else:
             return Response(Response.MULTIPLE_BAD_HISTOGRAM_MATCH, qtime = response.header["QTime"], tic=tic)
 
@@ -266,14 +288,17 @@ def local_save(filename):
     disk.close()
     print "Done"
     
-def local_ingest(fingerprint_list):
-    for fprint in fingerprint_list:
+def local_ingest(docs, codes):
+    store = dict(codes)
+    _fake_solr["store"].update(store)
+    for fprint in docs:
         trackid = fprint["track_id"]
-        _fake_solr["store"][trackid] = fprint["fp"]
         keys = set(fprint["fp"].split(" ")[0::2]) # just one code indexed
         for k in keys:
-            _fake_solr["index"].setdefault(k,[]).append(trackid)
-        _fake_solr["metadata"][trackid] = {"length": fprint["length"]}
+            tracks = _fake_solr["index"].setdefault(k,[])
+            if trackid not in tracks:
+                tracks.append(trackid)
+        _fake_solr["metadata"][trackid] = {"length": fprint["length"], "codever": fprint["codever"]}
         if "artist" in fprint:
             _fake_solr["metadata"][trackid]["artist"] = fprint["artist"]
         if "release" in fprint:
@@ -286,14 +311,24 @@ def local_delete(tracks):
         codes = set(_fake_solr["store"][track].split(" ")[0::2])
         del _fake_solr["store"][track]
         for code in codes:
-            _fake_solr["index"][code].remove(track)
+            # Make copy so destructive editing doesn't break for loop
+            codetracks = list(_fake_solr["index"][code])
+            for trid in codetracks:
+                if trid.startswith(track):
+                    _fake_solr["index"][code].remove(trid)
+                    try:
+                        del _fake_solr["metadata"][trid]
+                    except KeyError:
+                        pass
             if len(_fake_solr["index"][code]) == 0:
                 del _fake_solr["index"][code]
-        del _fake_solr["metadata"][trackid]
+        
 
 def local_dump():
     print "Stored tracks:"
-    for t in _fake_solr["store"].keys():
+    print _fake_solr["store"].keys()
+    print "Metadata:"
+    for t in _fake_solr["metadata"].keys():
         print t, _fake_solr["metadata"][t]
     print "Keys:"
     for k in _fake_solr["index"].keys():
@@ -337,7 +372,8 @@ def delete(track_ids, do_commit=True, local=False):
         return local_delete(track_ids)
 
     with solr.pooled_connection(_fp_solr) as host:
-        host.delete_many(track_ids)
+        for t in track_ids:
+            host.delete_query("track_id:%s*" % t)
     
     try:
         get_tyrant().multi_del(track_ids)
@@ -347,27 +383,78 @@ def delete(track_ids, do_commit=True, local=False):
     if do_commit:
         commit()
 
+
+def chunker(seq, size):
+    return [tuple(seq[pos:pos + size]) for pos in xrange(0, len(seq), size)]
+
+def split_codes(fp):
+    """ Split a codestring into a list of codestrings. Each string contains
+        at most 60 seconds of codes, and codes overlap every 30 seconds. Given a
+        track id, return track ids of the form trid-0, trid-1, trid-2, etc. """
+
+    # Convert seconds into time units
+    segmentlength = 60 * 1000.0 / 43.45
+    halfsegment = segmentlength / 2.0
     
+    trid = fp["track_id"]
+    codestring = fp["fp"]
+
+    ret = []
+    if codestring == "":
+        return ret
+    codes = codestring.split()
+    pairs = chunker(codes, 2)
+
+    pairs.sort(key=lambda (x,y): (int(y),x))
+
+    lasttime = int(pairs[-1][1])
+    numsegs = int(lasttime / halfsegment) + 1
+    #print numsegs,"segments"
+
+    for i in range(numsegs):
+        s = i * halfsegment
+        e = i * halfsegment + segmentlength
+        #print i, s, e
+        key = "%s-%d" % (trid, i)
+        codes = []
+        for c in pairs:
+            if int(c[1]) >= s and int(c[1]) <= e:
+              codes.extend(list(c))
+        segment = {"track_id": key,
+                   "fp": " ".join(codes),
+                   "length": fp["length"],
+                   "codever": fp["codever"]}
+        if "artist" in fp: segment["artist"] = fp["artist"]
+        if "release" in fp: segment["release"] = fp["release"]
+        if "track" in fp: segment["track"] = fp["track"]
+        ret.append(segment)
+
+    #print json.dumps(ret, indent=4)
+    return ret
+
 def ingest(fingerprint_list, do_commit=True, local=False):
     """ Ingest some fingerprints into the fingerprint database.
         The fingerprints should be of the form
-          {"track_id": id, "fp": fp, "artist": artist, "release": release, "track": track, "length": length, "version": "codever"}
-        or a list of the same.
+          {"track_id": id, "fp": fp, "artist": artist, "release": release, "track": track, "length": length, "codever": "codever"}
+        or a list of the same. All parameters except length must be strings. Length is an integer.
         artist, release and track are not required but highly recommended.
-        length is the length of the track being ingested in milliseconds
+        length is the length of the track being ingested in seconds.
         if track_id is empty, one will be generated.
     """
     if not isinstance(fingerprint_list, list):
         fingerprint_list = [fingerprint_list]
-
-    if local:
-        return local_ingest(fingerprint_list)
-
+        
     docs = []
     codes = []
     for fprint in fingerprint_list:
-        docs.append(fprint)
-        codes.append((fprint["track_id"], fprint["fp"]))
+        if not ("track_id" in fprint and "fp" in fprint and "length" in fprint and "codever" in fprint):
+            raise Exception("Missing required fingerprint parameters (track_id, fp, length, codever")
+        split_prints = split_codes(fprint)
+        docs.extend(split_prints)
+        codes.append((fprint["track_id"].encode("utf-8"), fprint["fp"].encode("utf-8")))
+
+    if local:
+        return local_ingest(docs, codes)
 
     with solr.pooled_connection(_fp_solr) as host:
         host.add_many(docs)
