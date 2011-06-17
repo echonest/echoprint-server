@@ -29,12 +29,12 @@ urls = (
 
 class ingest:
     def POST(self):
-        params = web.input(track_id="default", fp_code="", artist="", release="", track="", length=None)
+        params = web.input(track_id="default", fp_code="", artist=None, release=None, track=None, length=None, codever=None)
         if params.track_id == "default":
             track_id = fp.new_track_id()
         else:
             track_id = params.track_id
-        if params.length is None:
+        if params.length is None or params.codever is None:
             return web.webapi.BadRequest()
         
         # First see if this is a compressed code
@@ -45,13 +45,14 @@ class ingest:
         else:
             code_string = params.fp_code
 
-        fp.ingest({"track_id": track_id, 
-                    "fp": code_string,
-                    "length": params.length,
-                    "artist": params.artist,
-                    "release": params.release,
-                    "track": params.track
-                    }, do_commit=True, local=False)
+        data = {"track_id": track_id, 
+                "fp": code_string,
+                "length": params.length,
+                "codever": params.codever }
+        if params.artist: data["artist"] = params.artist
+        if params.release: data["release"] = params.release
+        if params.track: data["track"] = params.track
+        fp.ingest(data, do_commit=True, local=False)
 
         return json.dumps({"track_id":track_id, "status":"ok"})
         
