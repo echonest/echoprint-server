@@ -452,7 +452,7 @@ def ingest(fingerprint_list, do_commit=True, local=False):
             raise Exception("Missing required fingerprint parameters (track_id, fp, length, codever")
         split_prints = split_codes(fprint)
         docs.extend(split_prints)
-        codes.append((fprint["track_id"].encode("utf-8"), fprint["fp"].encode("utf-8")))
+        codes.extend(((c["track_id"].encode("utf-8"), c["fp"].encode("utf-8")) for c in split_prints))
 
     if local:
         return local_ingest(docs, codes)
