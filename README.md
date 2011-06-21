@@ -1,14 +1,12 @@
 # Server components for Echoprint.
 
-**Please note: this is not the final version and will likely not store codes that match release Echoprint codes.**
-
 Echoprint is an open source music fingerprint and resolving framework powered by the [The Echo Nest](http://the.echonest.com/ "The Echo Nest"). The [code generator](http://github.com/echonest/echoprint-codegen "echoprint-codegen") (library to convert PCM samples from a microphone or file into Echoprint codes) is MIT licensed and free for any use. The [server component](http://github.com/echonest/echoprint-server "echoprint-server") that stores and resolves queries is Apache licensed and free for any use. The [data for resolving to millions of songs](http://echoprint.me/data "Echoprint Data") is free for any use provided any changes or additions are merged back to the community. 
 
 ## What is included
 
 The Echoprint server is a custom component for Apache Solr to index Echoprint codes and hash times. In order to keep the index fast, the Echoprint codes are stored in a Tokyo Tyrant key/value store. We also include the python API layer code necessary to match tracks based on the response from the custom component as well as a demo (non-production) API meant to illustrate how to setup and run the Echoprint service.
 
-Non-included requirements for the server (newota):
+Non-included requirements for the server:
 
 * java 1.6
 * python 2.5 or higher
@@ -30,6 +28,8 @@ Additional non-included requirements for the demo:
     Hashr/ - java project for a custom solr field type to handle Echoprint data
 
     solr/ - complete solr install with Hashr already in the right place and with the right schema and config to make it work.
+    
+    util/ - Utilities for importing and evaluating Echoprint
 
 
 ## How to run the server
@@ -43,6 +43,8 @@ Additional non-included requirements for the demo:
         _fp_solr = solr.SolrConnection("http://localhost:8502/solr/fp")
 
 2. Start the Tokyo Tyrant server.
+
+        ttserver
 
     Again, if the location of the TT server differs, update fp.py:
 
@@ -93,6 +95,49 @@ For example:
 POST or GET the following:
 
     fp_code : packed code from codegen
+
+## Generating and importing data
+
+1. Download and compile the echoprint-codegen
+2. Generate a list of files to fingerprint
+        find /music -name "*.mp3" > music_to_ingest
+3. Generate fingerprint codes for your files
+        ./codegen -s < music_to_ingest > allcodes.json
+4. Ingest the generated json.
+        python fastingest.py [-b] allcodes.json
+    The -b flag creates a file, bigeval.json that can be used to evaluate the accuracy of the fingerprint and server (see below)
+
+## Using the community data
+
+Publicly available fingerprint data is available under the Echoprint Database License. If you want to use this data
+you can download it from http://echoprint.me/data/
+
+Use the fastingest.py tool to import this data like above:
+    python fastingest.py [-b] 
+You can run fastingest many times on one or more machines, as long as you update the configuration information in fp.py
+
+## Evaluating fingerprint accuracy
+We provide an evaluation tool, _bigeval_, that can be used to test the accuracy of the fingerprint and server.
+
+
+You can test for _true negatives_ by creating a list of tracks that you know are not in the database:
+    find /new_music -type f > new_music
+Name the file new_music and put it in the same directory as bigeval.py.
+
+Run bigeval.py without any arguments to get a usage statement. As a simple test you could run
+    python bigeval.py -c 1000
+to test 1000 random files.
+
+Every 10 files tested, bigeval will print out a line that looks like this.
+
+If an error occurrs during the matching, a line that looks like this will be printed.
+
+If you supply the -p flag
+
+
+Use -1 to test a single file and print its score information
+
+A number of _munge_ parameters are available to bigeval. These parameters alter the input file before generating a fingerprint, to simulate noisy signals.
 
 
 ## Notes
