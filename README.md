@@ -30,13 +30,15 @@ Additional non-included requirements for the demo:
     solr/ - complete solr install with Hashr already in the right place and with the right schema and config to make it work.
     
     util/ - Utilities for importing and evaluating Echoprint
+    util/fastingest.py - import codes into the database
+    util/bigeval.py - evaluate the search accuracy of the database
 
 
 ## How to run the server
 
 1. Start the server like this (change your home directory to where you have echoprint-server/solr/solr)
 
-        java -Dsolr.solr.home=/Users/bwhitman/outside/echoprint-server/solr/solr/solr/ -Djava.awt.headless=true -jar start.jar
+        java -Dsolr.solr.home=/home/path/to/echoprint-server/solr/solr/solr/ -Djava.awt.headless=true -jar start.jar
 
     If you run this server somewhere else other than localhost, update the pointer to it in fp.py:
 
@@ -44,7 +46,7 @@ Additional non-included requirements for the demo:
 
 2. Start the Tokyo Tyrant server.
 
-        ttserver
+        ttservctl start
 
     Again, if the location of the TT server differs, update fp.py:
 
@@ -71,41 +73,44 @@ fp.py has all the methods you'll need.
 
 1. Run the api.py webserver as a test
 
-    cd API
-    python api.py 8080
+        cd API
+        python api.py 8080
 
 2. Ingest codes with http://localhost:8080/ingest:
 
-POST the following variables:
+    POST the following variables:
 
-    fp_code : packed code from codegen
-    track_id : if you want your own track_ids. If you don't give one we'll generate one.
-    length : the length of the track in seconds
-    codever : the version of the codegen
-    artist : the artist of the track (optional)
-    release : the release of the track (optional)
-    track : the track name (optional)
+        fp_code : packed code from codegen
+        track_id : if you want your own track_ids. If you don't give one we'll generate one.
+        length : the length of the track in seconds
+        codever : the version of the codegen
+        artist : the artist of the track (optional)
+        release : the release of the track (optional)
+        track : the track name (optional)
 
-For example:
+    For example:
 
-    curl http://localhost:8080/ingest -d "fp_code=eJx1W...&track_id=thisone&length=300&codever=4.1"
+        curl http://localhost:8080/ingest -d "fp_code=eJx1W...&track_id=thisone&length=300&codever=4.1"
 
 3. Query with http://localhost:8080/query?fp_code=XXX
 
-POST or GET the following:
+    POST or GET the following:
 
-    fp_code : packed code from codegen
+        fp_code : packed code from codegen
 
 ## Generating and importing data
 
 1. Download and compile the echoprint-codegen
 2. Generate a list of files to fingerprint
+
         find /music -name "*.mp3" > music_to_ingest
-3. Generate fingerprint codes for your files
+4. Generate fingerprint codes for your files
+
         ./codegen -s < music_to_ingest > allcodes.json
-4. Ingest the generated json.
+5. Ingest the generated json.
+
         python fastingest.py [-b] allcodes.json
-    The -b flag creates a file, bigeval.json that can be used to evaluate the accuracy of the fingerprint and server (see below)
+    The -b flag creates a file named bigeval.json that can be used to evaluate the accuracy of the fingerprint and server (see below)
 
 ## Using the community data
 
@@ -113,32 +118,50 @@ Publicly available fingerprint data is available under the Echoprint Database Li
 you can download it from http://echoprint.me/data/
 
 Use the fastingest.py tool to import this data like above:
-    python fastingest.py [-b] 
-You can run fastingest many times on one or more machines, as long as you update the configuration information in fp.py
+
+    python fastingest.py [-b] ~/Downloads/echoprint-dump*.json
+
+You can run fastingest many times on one or more machines, as long as you update the configuration information for solr and tokyo tyrant in fp.py
 
 ## Evaluating fingerprint accuracy
 We provide an evaluation tool, _bigeval_, that can be used to test the accuracy of the fingerprint and server.
 
+Run bigeval.py without any arguments to get a usage statement. This command will test 1000 random files.
 
-You can test for _true negatives_ by creating a list of tracks that you know are not in the database:
-    find /new_music -type f > new_music
-Name the file new_music and put it in the same directory as bigeval.py.
-
-Run bigeval.py without any arguments to get a usage statement. As a simple test you could run
     python bigeval.py -c 1000
-to test 1000 random files.
 
-Every 10 files tested, bigeval will print out a line that looks like this.
+For every 10 files tested, bigeval will print out a line that looks like this.
 
-If an error occurrs during the matching, a line that looks like this will be printed.
+    PR 0.0875 CAR 0.9125 FAR 0.0000 FRR 0.0875 {'tn': 0, 'err-api': 0, 'fp-a': 1, 'tp': 73, 'err-codegen': 0, 'fp-b': 0, 'err-data': 0, 'total': 80, 'fn': 6, 'err-munge': 0}
 
-If you supply the -p flag
+This is what the fields mean:
 
+    PR           "probability of error"  a weighted measure of the overall goodness of the FP
+    CAR          "correct accept rate"   probability that you will correctly identify a known song
+    FAR          "false accept rate"     probability that you will say a song is there that is not
+    FRR          "false reject rate"     probability that you will say a song is not there that is
+    err-api      API error               # of times the API had a timeout or error
+    err-data     data problem            # of times our datastore had an issue (missing data is the biggest culprit)
+    err-codegen  codegen fail            # of times codegen did not return properly with data
+    err-munge    munger err              # of times the munging process (downsampling, filtering, re-encoding etc) did not generate a playable file
+    fp-a         false pos A             we had a false positive where the wrong song was identified
+    fp-b         false pos B             we said a song was there that was not actually there
+    tp           true pos                correct song chosen
+    tn           true neg                song correctly identified as not there
+    fn           false neg               song there but we said it wasn't
 
-Use -1 to test a single file and print its score information
+If an error occurs during the matching, a describing the error will be printed.
+Use the -p flag to print extra information about the scores obtained from solr  when an error occurs to see how the server is choosing its winner.
+Use -1 <file> to test a single file and print its score information
 
 A number of _munge_ parameters are available to bigeval. These parameters alter the input file before generating a fingerprint, to simulate noisy signals.
+Run bigeval.py --help to see the available options. These options require mpg123 and ffmpeg to be installed.
 
+You can test for _true negatives_ by creating a list of tracks that you know are not in the database:
+
+    find /new_music -type f > new_music
+
+Name the file new_music and put it in the same directory as bigeval.py.
 
 ## Notes
 
