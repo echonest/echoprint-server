@@ -74,14 +74,11 @@ def inflate_code_string(s):
 
     # Parse out n groups of 5 timestamps in hex; then n groups of 8 hash codes in hex.
     end_timestamps = n*5
-    times = [int(''.join(t), 16) for t in pairs(s[:end_timestamps], 5)]
-    codes = [int(''.join(t), 16) for t in pairs(s[end_timestamps:], 5)]
+    times = [int(''.join(t), 16) for t in chunker(s[:end_timestamps], 5)]
+    codes = [int(''.join(t), 16) for t in chunker(s[end_timestamps:], 5)]
 
     assert(len(times) == len(codes)) # these should match up!
     return ' '.join('%d %d' % (c, t) for c,t in zip(codes, times))
-    
-        
-
 
 def decode_code_string(compressed_code_string):
     compressed_code_string = compressed_code_string.encode('utf8')
@@ -176,13 +173,9 @@ def best_match_for_query(code_string, elbow=10, local=False):
             return Response(Response.MULTIPLE_GOOD_MATCH_HISTOGRAM_INCREASED, TRID=trid, score=actual_score_top_score, qtime=response.header["QTime"], tic=tic)
         else:
             # If the actual score went down it still could be close enough, so check for that
-            # If the actual score went down it still could be close enough, so check for that
-            if original_scores[actual_score_top_track_id] - actual_score_top_score <= (actual_score_top_score / 2):
-                if (actual_score_top_score >= elbow/2) and ((actual_score_top_score - actual_score_2nd_score) >= (actual_score_top_score / 2)):  # for examples [10,4], 10-4 = 6, which >= 5, so OK
-                    trid = actual_score_top_track_id.split("-")[0]
-                    return Response(Response.MULTIPLE_GOOD_MATCH_HISTOGRAM_DECREASED, TRID=trid, score=actual_score_top_score, qtime=response.header["QTime"], tic=tic)
-                else:
-                    return Response(Response.MULTIPLE_BAD_HISTOGRAM_MATCH, qtime = response.header["QTime"], tic=tic)
+            if actual_score_top_score > (original_scores[actual_score_top_track_id] / 2): 
+                trid = actual_score_top_track_id.split("-")[0]
+                return Response(Response.MULTIPLE_GOOD_MATCH_HISTOGRAM_DECREASED, TRID=trid, score=actual_score_top_score, qtime=response.header["QTime"], tic=tic)
             else:
                 # If the actual score was not close enough, then no match.
                 return Response(Response.MULTIPLE_BAD_HISTOGRAM_MATCH, qtime=response.header["QTime"], tic=tic)
@@ -387,6 +380,58 @@ def delete(track_ids, do_commit=True, local=False):
 
 def chunker(seq, size):
     return [tuple(seq[pos:pos + size]) for pos in xrange(0, len(seq), size)]
+
+def load():
+    j = json.load(open("/Users/alastairporter/paulify-whiten-codes/paulify-codes-1308043617-29987.json"))
+    return decode_code_string(j[0]["code"])
+
+def fast_split_codes(fp):
+    """ Split a codestring into a list of codestrings. Each string contains
+        at most 60 seconds of codes, and codes overlap every 30 seconds. Given a
+        track id, return track ids of the form trid-0, trid-1, trid-2, etc. """
+
+    # Convert seconds into time units
+    segmentlength = 60 * 1000.0 / 43.45
+    halfsegment = segmentlength / 2.0
+    
+    trid = fp["track_id"]
+    codestring = fp["fp"]
+
+    if codestring == "":
+        yield ret
+    codes = codestring.split()
+    pairs = chunker(codes, 2)
+    pairs = [(int(x[1]), " ".join(x)) for x in pairs]
+
+    pairs.sort()
+
+    lasttime = pairs[-1][0]
+    numsegs = int(lasttime / halfsegment) + 1
+    #print numsegs,"segments"
+
+    sindex = 0
+    for i in range(numsegs):
+        s = i * halfsegment
+        e = i * halfsegment + segmentlength
+        #print i, s, e
+        
+        while sindex < size and pairs[sindex][0] < s:
+            #print "s", sindex, l[sindex]
+            sindex+=1
+        eindex = sindex
+        while eindex < size and pairs[eindex][0] < e:
+            #print "e",eindex,l[eindex]
+            eindex+=1
+        key = "%s-%d" % (trid, i)
+        
+        segment = {"track_id": key,
+                   "fp": " ".join((p[1]) for p in pairs[sindex:eindex]),
+                   "length": fp["length"],
+                   "codever": fp["codever"]}
+        if "artist" in fp: segment["artist"] = fp["artist"]
+        if "release" in fp: segment["release"] = fp["release"]
+        if "track" in fp: segment["track"] = fp["track"]
+        yield segment
 
 def split_codes(fp):
     """ Split a codestring into a list of codestrings. Each string contains
