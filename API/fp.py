@@ -133,16 +133,16 @@ def best_match_for_query(code_string, elbow=10, local=False):
         else:
             return Response(Response.SINGLE_BAD_MATCH, qtime=response.header["QTime"], tic=tic)
 
-    # If the scores are really low (less than 10% of the query length) then say no results
-    if top_match_score < code_len * 0.1:
+    # If the scores are really low (less than 7.5% of the query length) then say no results
+    if top_match_score < code_len * 0.075:
         return Response(Response.MULTIPLE_BAD_HISTOGRAM_MATCH, qtime = response.header["QTime"], tic=tic)
 
     # OK, there are at least two matches (we almost always are in this case.)
     # Check if the delta between the top match and the 2nd top match is within elbow.
-    if top_match_score - int(response.results[1]["score"]) >= elbow:
-        # There was a strong match, the first one.
-        trackid = response.results[0]["track_id"].split("-")[0]
-        return Response(Response.MULTIPLE_GOOD_MATCH, TRID=trackid, score=int(response.results[0]["score"]), qtime=response.header["QTime"], tic=tic)
+    #if top_match_score - int(response.results[1]["score"]) >= elbow:
+    #    # There was a strong match, the first one.
+    #    trackid = response.results[0]["track_id"].split("-")[0]
+    #    return Response(Response.MULTIPLE_GOOD_MATCH, TRID=trackid, score=int(response.results[0]["score"]), qtime=response.header["QTime"], tic=tic)
 
     # Not a strong match, so we look up the codes in the keystore and compute actual matches...
 
@@ -488,13 +488,8 @@ def query_fp(code_string, rows=15, local=False, get_data=False):
 def fp_code_for_track_id(track_id, local=False):
     if local:
         return local_fp_code_for_track_id(track_id)
-    # Get it from solr
-    with solr.pooled_connection(_fp_solr) as host:
-        resp = host.query("track_id:"+track_id, rows=1, fields="fp")
-    if len(resp.results):
-        return resp.results[0]["fp"]
-    else:
-        return None
+    
+    return get_tyrant().get(track_id.encode("utf-8"))
 
 def new_track_id():
     rand5 = ''.join(random.choice(string.letters) for x in xrange(5)).upper()
