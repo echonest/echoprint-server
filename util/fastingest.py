@@ -16,6 +16,8 @@ def parse_json_dump(jfile):
     bigeval = {}
     fullcodes = []
     for c in codes:
+        if "code" not in c:
+            continue
         code = c["code"]
         m = c["metadata"]
         if "track_id" in m:
@@ -58,7 +60,7 @@ if __name__ == "__main__":
     for (i, f) in enumerate(sys.argv[pos:]):
         print "%d/%d %s" % (i+1, len(sys.argv)-pos, f)
         codes, bigeval = parse_json_dump(f)
-        fp.ingest(codes)
+        fp.ingest(codes, do_commit=False)
         if write_bigeval:
             bename = "bigeval.json"
             if not os.path.exists(bename):
@@ -67,3 +69,4 @@ if __name__ == "__main__":
                 be = json.load(open(bename))
             be.update(bigeval)
             json.dump(be, open(bename, "w"))
+    fp.commit()
