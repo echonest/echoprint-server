@@ -30,12 +30,13 @@ class Response(object):
     NOT_ENOUGH_CODE, CANNOT_DECODE, SINGLE_BAD_MATCH, SINGLE_GOOD_MATCH, NO_RESULTS, MULTIPLE_GOOD_MATCH_HISTOGRAM_INCREASED, \
         MULTIPLE_GOOD_MATCH_HISTOGRAM_DECREASED, MULTIPLE_BAD_HISTOGRAM_MATCH, MULTIPLE_GOOD_MATCH = range(9)
 
-    def __init__(self, code, TRID=None, score=0, qtime=0, tic=0):
+    def __init__(self, code, TRID=None, score=0, qtime=0, tic=0, metadata={}):
         self.code = code
         self.qtime = qtime
         self.TRID = TRID
         self.score = score
         self.total_time = int(time.time()*1000) - tic
+        self.metadata = metadata
 
     def __len__(self):
         if self.TRID is not None:
@@ -97,6 +98,20 @@ def decode_code_string(compressed_code_string):
         actual_code = inflate_code_string(actual_code)
     return actual_code
 
+def metadata_for_track_id(track_id):
+    if not track_id or not len(track_id):
+        return {}
+    # Assume track_ids have 1 - and it's at the end of the id.
+    if "-" not in track_id:
+        track_id = "%s-0" % track_id
+    with solr.pooled_connection(_fp_solr) as host:
+        response = host.query("track_id:%s" % track_id)
+
+    if len(response.results):
+        return response.results[0]
+    else:
+        return {}
+
 def best_match_for_query(code_string, elbow=10, local=False):
     # DEC strings come in as unicode so we have to force them to ASCII
     code_string = code_string.encode("utf8")
@@ -125,8 +140,9 @@ def best_match_for_query(code_string, elbow=10, local=False):
     if len(response.results) == 1:
         trackid = response.results[0]["track_id"]
         trackid = trackid.split("-")[0] # will work even if no `-` in trid
+        meta = metadata_for_track_id(trackid)
         if code_len - top_match_score < elbow:
-            return Response(Response.SINGLE_GOOD_MATCH, TRID=trackid, score=top_match_score, qtime=response.header["QTime"], tic=tic)
+            return Response(Response.SINGLE_GOOD_MATCH, TRID=trackid, score=top_match_score, qtime=response.header["QTime"], tic=tic, metadata=meta)
         else:
             return Response(Response.SINGLE_BAD_MATCH, qtime=response.header["QTime"], tic=tic)
 
@@ -165,25 +181,24 @@ def best_match_for_query(code_string, elbow=10, local=False):
     # Get the 2nd top one (we know there is always at least 2 matches)
     (actual_score_2nd_track_id, actual_score_2nd_score) = sorted_actual_scores[1]
 
+    trackid = actual_score_top_track_id.split("-")[0]
+    meta = metadata_for_track_id(trackid)
     # If the top actual score is greater than the minimum (elbow) then ...
     if actual_score_top_score >= elbow:
         # Check if the actual score is greater than its fast score. if it is, it is certainly a match.
         if actual_score_top_score > original_scores[actual_score_top_track_id]:
-            trid = actual_score_top_track_id.split("-")[0]
-            return Response(Response.MULTIPLE_GOOD_MATCH_HISTOGRAM_INCREASED, TRID=trid, score=actual_score_top_score, qtime=response.header["QTime"], tic=tic)
+            return Response(Response.MULTIPLE_GOOD_MATCH_HISTOGRAM_INCREASED, TRID=trackid, score=actual_score_top_score, qtime=response.header["QTime"], tic=tic, metadata=meta)
         else:
             # If the actual score went down it still could be close enough, so check for that
             if actual_score_top_score > (original_scores[actual_score_top_track_id] / 2): 
-                trid = actual_score_top_track_id.split("-")[0]
-                return Response(Response.MULTIPLE_GOOD_MATCH_HISTOGRAM_DECREASED, TRID=trid, score=actual_score_top_score, qtime=response.header["QTime"], tic=tic)
+                return Response(Response.MULTIPLE_GOOD_MATCH_HISTOGRAM_DECREASED, TRID=trackid, score=actual_score_top_score, qtime=response.header["QTime"], tic=tic, metadata=meta)
             else:
                 # If the actual score was not close enough, then no match.
                 return Response(Response.MULTIPLE_BAD_HISTOGRAM_MATCH, qtime=response.header["QTime"], tic=tic)
     else:
         # last ditch. if the 2nd top actual score is much less than the top score let it through.
         if (actual_score_top_score >= elbow/2) and ((actual_score_top_score - actual_score_2nd_score) >= (actual_score_top_score / 2)):  # for examples [10,4], 10-4 = 6, which >= 5, so OK
-            trid = actual_score_top_track_id.split("-")[0]
-            return Response(Response.MULTIPLE_GOOD_MATCH_HISTOGRAM_DECREASED, TRID=trid, score=actual_score_top_score, qtime=response.header["QTime"], tic=tic)
+            return Response(Response.MULTIPLE_GOOD_MATCH_HISTOGRAM_DECREASED, TRID=trackid, score=actual_score_top_score, qtime=response.header["QTime"], tic=tic, metadata=meta)
         else:
             return Response(Response.MULTIPLE_BAD_HISTOGRAM_MATCH, qtime = response.header["QTime"], tic=tic)
 
