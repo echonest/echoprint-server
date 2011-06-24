@@ -377,6 +377,26 @@ def delete(track_ids, do_commit=True, local=False):
     if do_commit:
         commit()
 
+def local_erase_database():
+    global _fake_solr
+    _fake_solr = {"index": {}, "store": {}, "metadata": {}}
+
+def erase_database(really_delete=False, local=False):
+    """ This method will delete your ENTIRE database. Only use it if you
+        know what you're doing.
+    """ 
+    if not really_delete:
+        raise Exception("Won't delete unless you pass in really_delete=True")
+
+    if local:
+        return local_erase_database()
+
+    with solr.pooled_connection(_fp_solr) as host:
+        host.delete_query("*:*")
+        host.commit()
+
+    tyrant = get_tyrant()
+    tyrant.multi_del(tyrant.keys())
 
 def chunker(seq, size):
     return [tuple(seq[pos:pos + size]) for pos in xrange(0, len(seq), size)]
