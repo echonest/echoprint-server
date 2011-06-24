@@ -25,7 +25,7 @@ import fp
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-_codegen_path = "../../echoprint-codegen/codegen.Darwin-i386"
+_codegen_path = "../../echoprint-codegen/echoprint-codegen"
 
 MUNGE = False 
 

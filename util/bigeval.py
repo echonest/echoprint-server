@@ -23,7 +23,7 @@ import math
 sys.path.insert(0, "../API")
 import fp
 
-config.CODEGEN_BINARY_OVERRIDE = os.path.expanduser("~/echonest/echoprint-codegen/codegen.Darwin-i386")
+config.CODEGEN_BINARY_OVERRIDE = os.path.abspath("../../echoprint-codegen/echoprint-codegen")
 
 # load the file list.
 bige = os.path.join(os.path.dirname(__file__), 'bigeval.json')
