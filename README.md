@@ -27,6 +27,8 @@ Additional non-included requirements for the demo:
     API/fp.py - main python module for Echoprint
     API/solr.py - Solr's python module (with slight enhancements)
 
+    examples/lookup.py - an example fingerprint and lookup of a query
+
     Hashr/ - java project for a custom solr field type to handle Echoprint data
 
     solr/ - complete solr install with Hashr already in the right place and with the right schema and config to make it work.
