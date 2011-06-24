@@ -13,6 +13,7 @@ Non-included requirements for the server:
 * java 1.6
 * python 2.5 or higher
 * simplejson (if python < 2.6)
+* [Tokyo Cabinet](http://fallabs.com/tokyocabinet/)
 * [Tokyo Tyrant](http://fallabs.com/tokyotyrant/)
 
 Additional non-included requirements for the demo:
@@ -61,17 +62,17 @@ Additional non-included requirements for the demo:
 fp.py has all the methods you'll need.
 
     >>> import fp
-    >>> fp.ingest({"my_track_id":"123 40 123 60 123 80 123 90 123 110 123 130"})
+    >>> fp.ingest({"track_id": "my_track_id", "fp": "123 40 123 60 123 80 123 90 123 110 123 130", "length": "120", "codever": "4.11"})
     >>> fp.commit()
-    >>> r = fp.best_match_for_query("123 40 123 60 123 80 123 90 123 110 123 130 123 150 123 160 123 80")
+    >>> r = fp.best_match_for_query("123 40 124 60 125 80 126 90 127 110 128 130 129 60 123 40 127 50")
     >>> r.message()
     'no results found (type 2)'
-    >>> example_code = "eJx1VFuSxCAIvBLyEDyOot7_CAtkp2qmdvaniYqdpiEBVGL4Dt3-geHfwSCuWfcPmPABm7_DAPsHKFjG5L-w7Rcm-AsY_oLyLyxOUPuA6e_gHHuu-bTgBSeuXYynK_wAtQEvcP4Hrn0HRAciirvk8RQaAyIQh7vfYfgLNvyChGsP9PDgDUaLvcH2AVHRNwAYg_qJ2M5qUWI4KtAiRqGe53cP6xFd-s08Z4RU3Jgk84zWldw_dDK_rR2eAWxR0fd9xE5Z6bC5k9dO8bzi7CEk-WBorsGm2Rdd--5buml62A-Hs_GxP7fnOSyD5EHHchaQsomg16ScDvNvRKFburT3OjfZI_l8Lsn3yVqlK6rR5F2bUYvnQPqw7srrcNn7Kp_QS28zLv92fCwZB5OWz5Pzgqvma4BZH54Y0lsyV88IA2SWb50yIj58bUzKfB0lD9YxK948yLyWlYXuI30WDUj67D4x73Vpp_yIPqauZoTy6Gy5XtxO-adzZz5NxVx3jwbkubJXP9HLV7XVs16LT5De8nqMZPm3hal4YZSeTe1UPV79l7s5jQiaGpg1tOapL4LUhYBnVN3iu_qpVR_tps9c6i67xE_N5YSaY4uOZbwoE6t_k1rNLSypPvTqf_wa6v13tupfdBczdovfRPnYMPULPHMfp2v_ADyGOfw="
+    >>> example_code = "eJwtzMkBACAMAsFWKCFoDu2_MYP6ms8Cx4QbOBwpAksktiiQcoFT7hf9SSEa56UPwg4mIg3n"
     >>> r = fp.best_match_for_query(example_code)
     >>> r.message()
     'OK (match type 5)'
     >>> r.TRID
-    u'thisone'
+    u'my_track_id'
 
 ## Running the example API server
 
@@ -110,7 +111,7 @@ fp.py has all the methods you'll need.
         find /music -name "*.mp3" > music_to_ingest
 4. Generate fingerprint codes for your files
 
-        ./codegen -s < music_to_ingest > allcodes.json
+        ./echoprint-codegen -s < music_to_ingest > allcodes.json
 5. Ingest the generated json.
 
         python fastingest.py [-b] allcodes.json
