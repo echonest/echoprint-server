@@ -98,12 +98,16 @@ def decode_code_string(compressed_code_string):
         actual_code = inflate_code_string(actual_code)
     return actual_code
 
-def metadata_for_track_id(track_id):
+def metadata_for_track_id(track_id, local=False):
     if not track_id or not len(track_id):
         return {}
     # Assume track_ids have 1 - and it's at the end of the id.
     if "-" not in track_id:
         track_id = "%s-0" % track_id
+        
+    if local:
+        return _fake_solr["metadata"][track_id]
+        
     with solr.pooled_connection(_fp_solr) as host:
         response = host.query("track_id:%s" % track_id)
 
@@ -164,7 +168,10 @@ def best_match_for_query(code_string, elbow=10, local=False):
     actual_scores = {}
     
     trackids = [r["track_id"].encode("utf8") for r in response.results]
-    tcodes = get_tyrant().multi_get(trackids)
+    if local:
+        tcodes = [_fake_solr["store"][t] for t in trackids]
+    else:
+        tcodes = get_tyrant().multi_get(trackids)
     
     # For each result compute the "actual score" (based on the histogram matching)
     for (i, r) in enumerate(response.results):
@@ -182,7 +189,7 @@ def best_match_for_query(code_string, elbow=10, local=False):
     (actual_score_2nd_track_id, actual_score_2nd_score) = sorted_actual_scores[1]
 
     trackid = actual_score_top_track_id.split("-")[0]
-    meta = metadata_for_track_id(trackid)
+    meta = metadata_for_track_id(trackid, local=local)
     # If the top actual score is greater than the minimum (elbow) then ...
     if actual_score_top_score >= elbow:
         # Check if the actual score is greater than its fast score. if it is, it is certainly a match.
@@ -360,7 +367,7 @@ def local_query_fp(code_string,rows=10,get_data=False):
         
         for x in lol:
             trackid = x[0].split("-")[0]
-            x.append(_fake_solr["store"][trackid])
+            x.append(_fake_solr["store"][x[0]])
             x.append(_fake_solr["metadata"][x[0]])
         return FakeSolrResponse(lol)
 
