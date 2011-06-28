@@ -41,8 +41,9 @@ Additional non-included requirements for the demo:
 
 ## How to run the server
 
-1. Start the server like this (change your home directory to where you have echoprint-server/solr/solr)
+1. Start the server like this (change your directory to where you have echoprint-server/solr/solr)
 
+        cd echoprint-server/solr/solr
         java -Dsolr.solr.home=/home/path/to/echoprint-server/solr/solr/solr/ -Djava.awt.headless=true -jar start.jar
 
     If you run this server somewhere else other than localhost, update the pointer to it in fp.py:
