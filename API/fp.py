@@ -116,6 +116,26 @@ def metadata_for_track_id(track_id, local=False):
     else:
         return {}
 
+def cut_code_string_length(code_string):
+    """ Remove all codes from a codestring that are > 60 seconds in length.
+    Because we can only match 60 sec, everything else is unnecessary """
+    split = code_string.split()
+    if len(split) < 2:
+        return code_string
+
+    # If we use the codegen on a file with start/stop times, the first timestamp
+    # is ~= the start time given. There might be a (slightly) earlier timestamp
+    # in another band, but this is good enough
+    first_timestamp = int(split[1])
+    sixty_seconds = int(60.0 * 43.45 + first_timestamp)
+    parts = []
+    for (code, t) in zip(split[::2], split[1::2]):
+        tstamp = int(t)
+        if tstamp <= sixty_seconds:
+            parts.append(code)
+            parts.append(t)
+    return " ".join(parts)
+
 def best_match_for_query(code_string, elbow=10, local=False):
     # DEC strings come in as unicode so we have to force them to ASCII
     code_string = code_string.encode("utf8")
@@ -131,6 +151,8 @@ def best_match_for_query(code_string, elbow=10, local=False):
     if code_len < elbow:
         logger.warn("Query code length (%d) is less than elbow (%d)" % (code_len, elbow))
         return Response(Response.NOT_ENOUGH_CODE, tic=tic)
+
+    code_string = cut_code_string_length(code_string)
 
     # Query the FP flat directly.
     response = query_fp(code_string, rows=30, local=local, get_data=True)
