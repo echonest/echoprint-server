@@ -59,8 +59,7 @@ class ingest:
     
 class query:
     def POST(self):
-        stuff = web.input(fp_code="")
-        return self.GET(stuff.fp_code)
+        return self.GET()
         
     def GET(self):
         stuff = web.input(fp_code="")
