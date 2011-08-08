@@ -96,7 +96,7 @@ fp.py has all the methods you'll need.
 
     For example:
 
-        curl http://localhost:8080/ingest -d "fp_code=eJx1W...&track_id=thisone&length=300&codever=4.1"
+        curl http://localhost:8080/ingest -d "fp_code=eJx1W...&track_id=thisone&length=300&codever=4.12"
 
 3. Query with http://localhost:8080/query?fp_code=XXX
 
@@ -110,13 +110,20 @@ fp.py has all the methods you'll need.
 2. Generate a list of files to fingerprint
 
         find /music -name "*.mp3" > music_to_ingest
-4. Generate fingerprint codes for your files
+3. Generate fingerprint codes for your files
 
         ./echoprint-codegen -s < music_to_ingest > allcodes.json
-5. Ingest the generated json.
+4. Ingest the generated json.
 
         python fastingest.py [-b] allcodes.json
     The -b flag creates a file named bigeval.json that can be used to evaluate the accuracy of the fingerprint and server (see below)
+
+The fastingest script is very memory intensive. For large dump files you may run out of memory while processing them. If this is the case, then you
+can split the dumps into smaller chunks using the splitdata.py script:
+
+    python splitdata.py ~/Downloads/echoprint-dump*.json
+
+This will create 5 new dump files, input-1.json, input-2.json, etc. Import as above with fastingest
 
 ## Using the community data
 
@@ -156,9 +163,9 @@ This is what the fields mean:
     tn           true neg                song correctly identified as not there
     fn           false neg               song there but we said it wasn't
 
-If an error occurs during the matching, a describing the error will be printed.
-Use the -p flag to print extra information about the scores obtained from solr  when an error occurs to see how the server is choosing its winner.
-Use -1 <file> to test a single file and print its score information
+If an error occurs during the matching, a message describing the error will be printed.
+Use the -p flag to print extra information about the scores obtained from solr when an error occurs to see how the server is choosing its winner.
+Use _-1 file_ to test a single file and print its score information
 
 A number of _munge_ parameters are available to bigeval. These parameters alter the input file before generating a fingerprint, to simulate noisy signals.
 Run bigeval.py --help to see the available options. These options require mpg123 and ffmpeg to be installed.
