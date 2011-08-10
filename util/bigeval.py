@@ -12,6 +12,7 @@ import sys
 import os
 import time
 import socket
+import subprocess
 try:
     import json
 except ImportError:
@@ -25,24 +26,80 @@ import fp
 
 config.CODEGEN_BINARY_OVERRIDE = os.path.abspath("../../echoprint-codegen/echoprint-codegen")
 
-# load the file list.
-bige = os.path.join(os.path.dirname(__file__), 'bigeval.json')
-if not os.path.exists(bige):
-    print >>sys.stderr, "Cannot find bigeval.json. did you run fastingest with the -b flag?"
-    sys.exit(1)
-_local_bigeval = json.load(open(bige,'r'))
+_local_bigeval = {}
+_new_music_files = []
+_new_queries = 0
+_old_queries = 0
+_total_queries = 0
 
-new_mus = os.path.join(os.path.dirname(__file__), 'new_music')
-if os.path.exists(new_mus):
-    _new_music_files = open(new_mus,'r').read().split('\n')
-else:
-    _new_music_files = []
+def decode_to_wav(decoder, file, target, what, start=-1, duration=-1, volume=100, downsample_to_22 = False, channels=2, speed_up=False, slow_down=False):
+    """ Given a file, a decoder and bunch of munge parameters, munge the file using the given decoder """
 
-_new_queries = float(len(_new_music_files))
-_old_queries = float(len(_local_bigeval.keys()))
-_total_queries = _new_queries + _old_queries
+    # We only need to do this once, regardless of decoder
+    if start > 0: what.update({"start":start})
+    if duration > 0: what.update({"duration":duration})
+    if volume > 0: what.update({"volume":volume})
+    if downsample_to_22: what.update({"downsample_22":True})
+    if channels < 2: what.update({"mono":True})
+    # speed_up and slow_down totally both break the FP. This is OK and expected but we should test it anyway.
+    if(speed_up): what.update({"skip_every_other_frame":True})
+    if(slow_down): what.update({"play_every_frame_2x":True})
 
-def munge(file, start=-1, duration=-1, bitrate=128, volume=-1, downsample_to_22 = False, speed_up = False, slow_down = False, lowpass_freq = -1, encode_to="mp3", channels=2):
+    if decoder == 'mpg123':
+        cmd = ["mpg123", "-q", "-w", target]
+        if start > 0: cmd.extend(["-k", str(int(start*44100 / 1152))])
+        if duration > 0: cmd.extend(["-n", str(int(duration*44100 / 1152))])
+        if volume > 0: cmd.extend(["-f", str(int( (float(volume)/100.0) * 32768.0 ))])
+        if downsample_to_22: cmd.extend(["-2"])
+        if channels < 2: cmd.extend(["-0"])
+        if speed_up: cmd.extend(["-d", "2"])
+        if slow_down: cmd.extend(["-h", "2"])
+        cmd.append(file)
+    elif decoder =="ffmpeg":
+        cmd = ["ffmpeg", "-i", file, "-f", "wav", "-y"]
+        if start > 0: cmd.extend(["-ss", str(start)])
+        if duration > 0: cmd.extend(["-t", str(duration)])
+        #if volume > 0: cmd.extend(["-vol", str(int( (float(volume)/100.0) * 32768.0 ))]
+        # -vol is undocumented, but apparently 256 is "normal"
+        if downsample_to_22: cmd.extend(["-ar", "22050"])
+        if channels < 2: cmd.extend(["-ac", "1"])
+        #if speed_up: cmd.extend(["-d", "2"])
+        #if slow_down: cmd.extend(["-h", "2"])
+        cmd.append(target)
+    elif decoder == "mad":
+        cmd = ["madplay", "-Q", "-o", "wave:%s" % target]
+        if start > 0: cmd.extend(["-s", str(start)])
+        if duration > 0: cmd.extend(["-t", str(duration)])
+        #if volume > 0: cmd.extend(["-f", str(int( (float(volume)/100.0) * 32768.0 ))]
+        # --attenuate or --amplify takes in dB -> need to convert % to db
+        if downsample_to_22: cmd.extend("--downsample")
+        if channels < 2: cmd.extend(["-m"])
+        #if speed_up: cmd.extend(["-d", "2"])
+        #if slow_down: cmd.extend(["-h", "2"])
+        cmd.append(file)
+    elif decoder == "sox":
+        cmd = ["sox", file, target]
+        if start < 0: start = 0
+        cmd.extend(["trim", str(start)])
+        if duration > 0: cmd.extend([str(duration)])
+        #if volume > 0: cmd.extend()
+        if downsample_to_22: cmd.extend(["rate", "22050"])
+        if channels < 2: cmd.extend(["channels", "1"])
+        if speed_up: cmd.extend(["speed", "2.0"])
+        if slow_down: cmd.extend(["speed", "0.5"])
+    else:
+        return (what, None)
+    """
+    # These will decode an mp3 to wav, but can't handle start/duration parameters
+    elif decoder == "lame":
+        cmd = ["lame", "--decode", file, target]
+    elif decoder == "afconvert":
+        cmd = ["afconvert", "-f", "WAVE", "-d", "LEI16", file, target]
+    """
+    subprocess.Popen(cmd, stderr=subprocess.PIPE).communicate()
+    return (what, target)
+
+def munge(file, start=-1, duration=-1, bitrate=128, volume=-1, downsample_to_22 = False, speed_up = False, slow_down = False, lowpass_freq = -1, encode_to="mp3", decoder="mpg123", channels=2):
     """
         duration: seconds of source file
         start: seconds to start reading
@@ -58,37 +115,9 @@ def munge(file, start=-1, duration=-1, bitrate=128, volume=-1, downsample_to_22 
     
     # Get a tempfile to munge to
     me = "/tmp/temp_"+str(random.randint(1,32768))+".wav"
+    what = {"decoder": decoder}
 
-    # Decode the file (NB: use a better decoder? afconvert / quicktime?)
-    cmd = "mpg123 -q -w " + me
-    what = {}
-    if(start > 0):
-        what.update({"start":start})
-        cmd = cmd + " -k " + str(int(start*44100 / 1152))
-    if(duration > 0):
-        what.update({"duration":duration})
-        cmd = cmd + " -n " + str(int(duration*44100 / 1152))
-    if(volume > 0):
-        what.update({"volume":volume})
-        cmd = cmd + " -f " + str(int( (float(volume)/100.0) * 32768.0 ))
-    if(downsample_to_22):
-        what.update({"downsample_22":True})
-        cmd = cmd + " -2 "
-    if(channels<2):
-        what.update({"mono":True})
-        cmd = cmd + " -0 "
-    # speed_up and slow_down totally both break the FP. This is OK and expected but we should test it anyway.
-    if speed_up and slow_down:
-        pass # uh
-    else:
-        if(speed_up):
-            what.update({"skip_every_other_frame":True})
-            cmd = cmd + " -d 2 "
-        if(slow_down):
-            what.update({"play_every_frame_2x":True})
-            cmd = cmd + " -h 2 "
-    cmd = cmd + " \"" + file + "\""
-    os.system(cmd)
+    (what, me) = decode_to_wav(decoder, file, me, what, start, duration, volume, downsample_to_22, channels, speed_up, slow_down)
 
     if not os.path.exists(me):
         print >> sys.stderr, "munge result not there"
@@ -102,6 +131,10 @@ def munge(file, start=-1, duration=-1, bitrate=128, volume=-1, downsample_to_22 
 
     roughly_in_seconds = file_size / 176000
     what.update({"actual_file_length":roughly_in_seconds})
+
+    if encode_to == "wav":
+        what.update({"encoder":"none","encode_to":"wav"})
+        return (me, what)
 
     if encode_to == "mp3":
         what.update({"encoder":"lame","encode_to":"mp3"})
@@ -121,10 +154,6 @@ def munge(file, start=-1, duration=-1, bitrate=128, volume=-1, downsample_to_22 
         what.update({"encoder":"ffmpeg","encode_to":"ogg"})
         cmd = "ffmpeg -i " + me + " -ab " + str(bitrate) + "k " + me + ".ogg 2>/dev/null"
 
-    if encode_to == "wav":
-        what.update({"encoder":"none","encode_to":"wav"})
-        return (me, what)
-        
     os.system(cmd)
     try:
         os.remove(me)
@@ -239,22 +268,17 @@ def test_single(filename, local=False, **munge_kwargs):
     """
     (new_file, what) = munge(filename, **munge_kwargs)
     query_obj = song.util.codegen(new_file, start=-1, duration=-1)
-    if not local:
-        s = fp.best_match_for_query(query_obj[0]["code"])
-        if s.TRID is not None:
+    s = fp.best_match_for_query(query_obj[0]["code"],local=local)
+    if s.TRID is not None:
+        if local:
             metad = _local_bigeval[s.TRID]
-            song_metadata = {"artist": metad["artist"], "release": metad["release"], "title": metad["title"]}
-            print str(song_metadata)
         else:
-            print "No match"
+            metad = fp.metadata_for_track_id(s.TRID)
+            metad["title"] = metad["track"]
+        song_metadata = {"artist": metad.get("artist", ""), "release": metad.get("release", ""), "title": metad.get("title", "")}
+        print str(song_metadata)
     else:
-        s = fp.best_match_for_query(query_obj[0]["code"],local=local)
-        if s.TRID is not None:
-            metad = _local_bigeval[s.TRID]
-            song_metadata = {"artist": metad["artist"], "release": metad["release"], "title": metad["title"]}
-            print str(song_metadata)
-        else:
-            print "No match"
+        print "No match"
     
     decoded = fp.decode_code_string(query_obj[0]["code"])
     print str(len(decoded.split(" "))/2) + " codes in original"
@@ -265,8 +289,12 @@ def test_single(filename, local=False, **munge_kwargs):
         scores = {}
         for r in response.results:
             trid = r["track_id"].split("-")[0]
-            metad = _local_bigeval[trid]
-            m = {"artist": metad["artist"], "release": metad["release"], "title": metad["title"]}
+            if local:
+                metad = _local_bigeval[trid]
+            else:
+                metad = fp.metadata_for_track_id(trid)
+                metad["title"] = metad["track"]
+            m = {"artist": metad.get("artist", ""), "release": metad.get("release", ""), "title": metad.get("title", "")}
             if m is not None:
                 actual_match = fp.actual_matches(decoded, fp.fp_code_for_track_id(r["track_id"], local=local))
                 tracks[r["track_id"]] = (m, r["score"], actual_match)
@@ -281,7 +309,7 @@ def test_single(filename, local=False, **munge_kwargs):
         print "response from fp flat was None -- decoded code was " + str(decoded)
     os.remove(new_file)
 
-def test(how_many, diag=False, local=False, **munge_kwargs):
+def test(how_many, diag=False, local=False, no_shuffle=False, **munge_kwargs):
     """
         Perform a test. Takes both new files and old files, munges them, tests the FP with them, computes various measures.
         how_many: how many files to process
@@ -290,7 +318,8 @@ def test(how_many, diag=False, local=False, **munge_kwargs):
     results = {"fp-a":0, "fp-b":0, "fn":0, "tp":0, "tn":0, "err-codegen":0, "err-munge":0, "err-api":0, "err-data":0, "total":0}
     
     docs_to_test = _local_bigeval.keys() + _new_music_files
-    random.shuffle(docs_to_test)
+    if not no_shuffle:
+        random.shuffle(docs_to_test)
 
     for x in docs_to_test:
         if results["total"] == how_many:
@@ -327,19 +356,24 @@ def usage():
     print "\t-c\t--count   \tHow many files to process (required if not --single)"
     print "\t-s\t--start   \tIn seconds, when to start decoding (0)"
     print "\t-d\t--duration\tIn seconds, how long to decode, -1 is unchanged (30)"
+    print "\t-D\t--decoder \tWhat decoder to use to make pcm ([mpg123|ffmpeg|sox|mad])"
     print "\t-b\t--bitrate \tIn kbps, encoded bitrate. only for mp3, m4a, ogg. (128)"
     print "\t-v\t--volume  \tIn %, volume of original. -1 for no adjustment. (-1)"
     print "\t-l\t--lowpass \tIn Hz, lowpass filter. -1 for no adjustment. (-1)"
     print "\t-e\t--encoder \tEncoder to use. wav, m4a, ogg, mp3. (wav)"
     print "\t-L\t--local   \tUse local data, not solr, with given JSON block (None)"
     print "\t-p\t--print   \tDuring bulk mode, show diagnostic on matches for types fp, fn, fp-a, fp-b (off)"
+    print "\t\t--no-shuffle\tdon't randomise the list of input files before running (for testing the exact same files each run) (off)"
     print "\t-m\t--mono    \tMono decoder. (off)"
     print "\t-2\t--22kHz   \tDownsample to 22kHz (off)"
     print "\t-B\t--binary  \tPath to the binary to use for this test (codegen on path)"
+    print "\t-t\t--test    \tlist of files to check. pickle of {trid:path, trid2:path2}, or 'none'"
+    print "\t-n\t--new     \tnewline separated file of files not in the database, or 'none'"
     print "\t-h\t--help    \tThis help message."
     
 def main(argv):
-    global _local_bigeval
+    global _local_bigeval, _new_music_files
+    global _new_queries, _old_queries, _total_queries
     
     single = None
     how_many = None
@@ -348,14 +382,21 @@ def main(argv):
     bitrate = 128
     volume = -1
     lowpass = -1
+    decoder = "mpg123"
     encoder = "wav"
     local = None
     diag = False
     channels = 2
     downsample = False
+    decoder = "mpg123"
+    testfile = os.path.join(os.path.dirname(__file__), 'bigeval.json')
+    newfile = "new_music"
+    no_shuffle = False
     
     try:
-        opts, args = getopt.getopt(argv, "1:c:s:d:b:v:l:L:e:B:pm2h", ["single=","count=","start=","duration=","bitrate=","volume=","lowpass=","encoder=","print","mono","local=","22kHz","help"])
+        opts, args = getopt.getopt(argv, "1:c:s:d:D:b:v:l:L:e:B:t:n:pm2h", 
+            ["single=","count=","start=","duration=", "decoder=","bitrate=","volume=","lowpass=",
+            "encoder=","print","mono","local=", "test=", "new=","22kHz","help","no-shuffle"])
     except getopt.GetoptError:
         usage()
         sys.exit(2)
@@ -369,6 +410,8 @@ def main(argv):
             start = int(arg)
         if opt in ("-d","--duration"):
             duration = int(arg)
+        if opt in ("-D","--decoder"):
+            decoder = arg
         if opt in ("-b","--bitrate"):
             bitrate = int(arg)
         if opt in ("-v","--volume"):
@@ -390,15 +433,40 @@ def main(argv):
                 print "Binary %s not found. Exiting." % arg
                 sys.exit(2)
             config.CODEGEN_BINARY_OVERRIDE = arg
+        if opt in ("-n","--new"):
+            newfile = arg
+        if opt in ("-t","--test"):
+            testfile = arg
+        if opt == "--no-shuffle":
+            no_shuffle = True
         if opt in ("-h","--help"):
             usage()
+            sys.exit(2)
     
     if (single is None) and (how_many is None):
+        print >>sys.stderr, "Run in single mode (-1) or say how many files to test (-c)"
         usage()
         sys.exit(2)
-    if (single is not None) and (diag is not False):
-        usage()
+    
+    if testfile.lower() == "none" and newfile.lower() == "none" and single is None:
+        # If both are none, we can't run
+        print >>sys.stderr, "Can't run with no datafiles. Skip --test, --new or add -1"
         sys.exit(2)
+    if testfile.lower() == "none":
+        _local_bigeval = {}
+    else:
+        if not os.path.exists(testfile):
+            print >>sys.stderr, "Cannot find bigeval.json. did you run fastingest with the -b flag?"
+            sys.exit(1)
+        _local_bigeval = json.load(open(testfile,'r'))
+    if newfile.lower() == "none" or not os.path.exists(newfile):
+        _new_music_files = []
+    else:
+        _new_music_files = open(newfile,'r').read().split('\n')
+
+    _new_queries = float(len(_new_music_files))
+    _old_queries = float(len(_local_bigeval.keys()))
+    _total_queries = _new_queries + _old_queries
     
     if local is None:
         local = False
@@ -428,7 +496,7 @@ def main(argv):
     if single is not None:
         test_single(single, local=local, start=start, duration = duration, bitrate = bitrate, volume = volume, lowpass_freq = lowpass, encode_to=encoder, downsample_to_22 = downsample, channels = channels)
     else:
-        results = test(how_many, diag = diag, local=local, start=start, duration = duration, bitrate = bitrate, volume = volume, lowpass_freq = lowpass, encode_to=encoder, downsample_to_22 = downsample, channels = channels)
+        results = test(how_many, diag = diag, local=local, no_shuffle=no_shuffle, start=start, duration = duration, bitrate = bitrate, volume = volume, lowpass_freq = lowpass, encode_to=encoder, downsample_to_22 = downsample, channels = channels)
         prf(results)
         dpwe(results)
 
