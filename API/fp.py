@@ -172,16 +172,9 @@ def best_match_for_query(code_string, elbow=10, local=False):
         else:
             return Response(Response.SINGLE_BAD_MATCH, qtime=response.header["QTime"], tic=tic)
 
-    # If the scores are really low (less than 7.5% of the query length) then say no results
-    if top_match_score < code_len * 0.075:
+    # If the scores are really low (less than 10% of the query length) then say no results
+    if top_match_score < code_len * 0.1:
         return Response(Response.MULTIPLE_BAD_HISTOGRAM_MATCH, qtime = response.header["QTime"], tic=tic)
-
-    # OK, there are at least two matches (we almost always are in this case.)
-    # Check if the delta between the top match and the 2nd top match is within elbow.
-    #if top_match_score - int(response.results[1]["score"]) >= elbow:
-    #    # There was a strong match, the first one.
-    #    trackid = response.results[0]["track_id"].split("-")[0]
-    #    return Response(Response.MULTIPLE_GOOD_MATCH, TRID=trackid, score=int(response.results[0]["score"]), qtime=response.header["QTime"], tic=tic)
 
     # Not a strong match, so we look up the codes in the keystore and compute actual matches...
 
@@ -209,6 +202,37 @@ def best_match_for_query(code_string, elbow=10, local=False):
     #logger.debug("Actual score for %s is %d (code_len %d), original was %d" % (r["track_id"], actual_scores[r["track_id"]], code_len, top_match_score))
     # Sort the actual scores
     sorted_actual_scores = sorted(actual_scores.iteritems(), key=lambda (k,v): (v,k), reverse=True)
+    
+    # Because we split songs up into multiple parts, sometimes the results will have the same track in the
+    # first few results. Remove these duplicates so that the falloff is (potentially) higher.
+    new_sorted_actual_scores = []
+    existing_trids = []
+    for trid, result in sorted_actual_scores:
+        trid_split = trid.split("-")[0]
+        if trid_split not in existing_trids:
+            new_sorted_actual_scores.append((trid, result))
+            existing_trids.append(trid_split)
+    
+    # We might have reduced the length of the list to 1
+    if len(new_sorted_actual_scores) == 1:
+        logger.info("only have 1 score result...")
+        (top_track_id, top_score) = new_sorted_actual_scores[0]
+        if top_score < code_len * 0.1:
+            logger.info("only result less than 10%% of the query string (%d < %d *0.1 (%d)) SINGLE_BAD_MATCH", top_score, code_len, code_len*0.1)
+            return Response(Response.SINGLE_BAD_MATCH, qtime = response.header["QTime"], tic=tic)
+        else:
+            if top_score > (original_scores[top_track_id] / 2): 
+                logger.info("top_score > original_scores[%s]/2 (%d > %d) GOOD_MATCH_DECREASED",
+                    top_track_id, top_score, original_scores[top_track_id]/2)
+                trid = top_track_id.split("-")[0]
+                return Response(Response.MULTIPLE_GOOD_MATCH_HISTOGRAM_DECREASED, TRID=trid, score=top_score, qtime=response.header["QTime"], tic=tic)
+            else:
+                logger.info("top_score NOT > original_scores[%s]/2 (%d <= %d) BAD_HISTOGRAM_MATCH",
+                    top_track_id, top_score, original_scores[top_track_id]/2)
+                return Response(Response.MULTIPLE_BAD_HISTOGRAM_MATCH, qtime=response.header["QTime"], tic=tic)
+        
+    sorted_actual_scores = new_sorted_actual_scores    
+
     # Get the top one
     (actual_score_top_track_id, actual_score_top_score) = sorted_actual_scores[0]
     # Get the 2nd top one (we know there is always at least 2 matches)
@@ -216,24 +240,19 @@ def best_match_for_query(code_string, elbow=10, local=False):
 
     trackid = actual_score_top_track_id.split("-")[0]
     meta = metadata_for_track_id(trackid, local=local)
-    # If the top actual score is greater than the minimum (elbow) then ...
-    if actual_score_top_score >= elbow:
-        # Check if the actual score is greater than its fast score. if it is, it is certainly a match.
-        if actual_score_top_score > original_scores[actual_score_top_track_id]:
-            return Response(Response.MULTIPLE_GOOD_MATCH_HISTOGRAM_INCREASED, TRID=trackid, score=actual_score_top_score, qtime=response.header["QTime"], tic=tic, metadata=meta)
-        else:
-            # If the actual score went down it still could be close enough, so check for that
-            if actual_score_top_score > (original_scores[actual_score_top_track_id] / 2): 
-                return Response(Response.MULTIPLE_GOOD_MATCH_HISTOGRAM_DECREASED, TRID=trackid, score=actual_score_top_score, qtime=response.header["QTime"], tic=tic, metadata=meta)
-            else:
-                # If the actual score was not close enough, then no match.
-                return Response(Response.MULTIPLE_BAD_HISTOGRAM_MATCH, qtime=response.header["QTime"], tic=tic)
+    
+    if actual_score_top_score < code_len * 0.1:
+        return Response(Response.MULTIPLE_BAD_HISTOGRAM_MATCH, qtime = response.header["QTime"], tic=tic)
     else:
-        # last ditch. if the 2nd top actual score is much less than the top score let it through.
-        if (actual_score_top_score >= elbow/2) and ((actual_score_top_score - actual_score_2nd_score) >= (actual_score_top_score / 2)):  # for examples [10,4], 10-4 = 6, which >= 5, so OK
-            return Response(Response.MULTIPLE_GOOD_MATCH_HISTOGRAM_DECREASED, TRID=trackid, score=actual_score_top_score, qtime=response.header["QTime"], tic=tic, metadata=meta)
+        # If the actual score went down it still could be close enough, so check for that
+        if actual_score_top_score > (original_scores[actual_score_top_track_id] / 2): 
+            if (actual_score_top_score - actual_score_2nd_score) >= (actual_score_top_score / 2):  # for examples [10,4], 10-4 = 6, which >= 5, so OK
+                return Response(Response.MULTIPLE_GOOD_MATCH_HISTOGRAM_DECREASED, TRID=trackid, score=actual_score_top_score, qtime=response.header["QTime"], tic=tic)
+            else:
+                return Response(Response.MULTIPLE_BAD_HISTOGRAM_MATCH, qtime = response.header["QTime"], tic=tic)
         else:
-            return Response(Response.MULTIPLE_BAD_HISTOGRAM_MATCH, qtime = response.header["QTime"], tic=tic)
+            # If the actual score was not close enough, then no match.
+            return Response(Response.MULTIPLE_BAD_HISTOGRAM_MATCH, qtime=response.header["QTime"], tic=tic)
 
 def actual_matches(code_string_query, code_string_match, slop = 2, elbow = 10):
     code_query = code_string_query.split(" ")
@@ -546,7 +565,7 @@ def split_codes(fp):
     #print json.dumps(ret, indent=4)
     return ret
 
-def ingest(fingerprint_list, do_commit=True, local=False):
+def ingest(fingerprint_list, do_commit=True, local=False, split=True):
     """ Ingest some fingerprints into the fingerprint database.
         The fingerprints should be of the form
           {"track_id": id, "fp": fp, "artist": artist, "release": release, "track": track, "length": length, "codever": "codever"}
@@ -560,12 +579,16 @@ def ingest(fingerprint_list, do_commit=True, local=False):
         
     docs = []
     codes = []
-    for fprint in fingerprint_list:
-        if not ("track_id" in fprint and "fp" in fprint and "length" in fprint and "codever" in fprint):
-            raise Exception("Missing required fingerprint parameters (track_id, fp, length, codever")
-        split_prints = split_codes(fprint)
-        docs.extend(split_prints)
-        codes.extend(((c["track_id"].encode("utf-8"), c["fp"].encode("utf-8")) for c in split_prints))
+    if split:
+        for fprint in fingerprint_list:
+            if not ("track_id" in fprint and "fp" in fprint and "length" in fprint and "codever" in fprint):
+                raise Exception("Missing required fingerprint parameters (track_id, fp, length, codever")
+            split_prints = split_codes(fprint)
+            docs.extend(split_prints)
+            codes.extend(((c["track_id"].encode("utf-8"), c["fp"].encode("utf-8")) for c in split_prints))
+    else:
+        docs.extend(fingerprint_list)
+        codes.extend(((c["track_id"].encode("utf-8"), c["fp"].encode("utf-8")) for c in fingerprint_list))
 
     if local:
         return local_ingest(docs, codes)
