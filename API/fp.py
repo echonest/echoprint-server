@@ -468,11 +468,7 @@ def erase_database(really_delete=False, local=False):
 def chunker(seq, size):
     return [tuple(seq[pos:pos + size]) for pos in xrange(0, len(seq), size)]
 
-def load():
-    j = json.load(open("/Users/alastairporter/paulify-whiten-codes/paulify-codes-1308043617-29987.json"))
-    return decode_code_string(j[0]["code"])
-
-def fast_split_codes(fp):
+def split_codes(fp):
     """ Split a codestring into a list of codestrings. Each string contains
         at most 60 seconds of codes, and codes overlap every 30 seconds. Given a
         track id, return track ids of the form trid-0, trid-1, trid-2, etc. """
@@ -484,18 +480,20 @@ def fast_split_codes(fp):
     trid = fp["track_id"]
     codestring = fp["fp"]
 
-    if codestring == "":
-        yield ret
     codes = codestring.split()
     pairs = chunker(codes, 2)
     pairs = [(int(x[1]), " ".join(x)) for x in pairs]
 
     pairs.sort()
+    size = len(pairs)
 
-    lasttime = pairs[-1][0]
-    numsegs = int(lasttime / halfsegment) + 1
-    #print numsegs,"segments"
+    if len(pairs):
+        lasttime = pairs[-1][0]
+        numsegs = int(lasttime / halfsegment) + 1
+    else:
+        numsegs = 0
 
+    ret = []
     sindex = 0
     for i in range(numsegs):
         s = i * halfsegment
@@ -518,51 +516,7 @@ def fast_split_codes(fp):
         if "artist" in fp: segment["artist"] = fp["artist"]
         if "release" in fp: segment["release"] = fp["release"]
         if "track" in fp: segment["track"] = fp["track"]
-        yield segment
-
-def split_codes(fp):
-    """ Split a codestring into a list of codestrings. Each string contains
-        at most 60 seconds of codes, and codes overlap every 30 seconds. Given a
-        track id, return track ids of the form trid-0, trid-1, trid-2, etc. """
-
-    # Convert seconds into time units
-    segmentlength = 60 * 1000.0 / 43.45
-    halfsegment = segmentlength / 2.0
-    
-    trid = fp["track_id"]
-    codestring = fp["fp"]
-
-    ret = []
-    if codestring == "":
-        return ret
-    codes = codestring.split()
-    pairs = chunker(codes, 2)
-
-    pairs.sort(key=lambda (x,y): (int(y),x))
-
-    lasttime = int(pairs[-1][1])
-    numsegs = int(lasttime / halfsegment) + 1
-    #print numsegs,"segments"
-
-    for i in range(numsegs):
-        s = i * halfsegment
-        e = i * halfsegment + segmentlength
-        #print i, s, e
-        key = "%s-%d" % (trid, i)
-        codes = []
-        for c in pairs:
-            if int(c[1]) >= s and int(c[1]) <= e:
-              codes.extend(list(c))
-        segment = {"track_id": key,
-                   "fp": " ".join(codes),
-                   "length": fp["length"],
-                   "codever": fp["codever"]}
-        if "artist" in fp: segment["artist"] = fp["artist"]
-        if "release" in fp: segment["release"] = fp["release"]
-        if "track" in fp: segment["track"] = fp["track"]
         ret.append(segment)
-
-    #print json.dumps(ret, indent=4)
     return ret
 
 def ingest(fingerprint_list, do_commit=True, local=False, split=True):
