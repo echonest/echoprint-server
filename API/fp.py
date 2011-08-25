@@ -13,6 +13,10 @@ import pickle
 from collections import defaultdict
 import zlib, base64, re, time, random, string, math
 import pytyrant
+import datetime
+
+now = datetime.datetime.utcnow()
+IMPORTDATE = now.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 try:
     import json
@@ -516,15 +520,28 @@ def split_codes(fp):
         if "artist" in fp: segment["artist"] = fp["artist"]
         if "release" in fp: segment["release"] = fp["release"]
         if "track" in fp: segment["track"] = fp["track"]
+        if "source" in fp: segment["source"] = fp["source"]
+        if "import_date" in fp: segment["import_date"] = fp["import_date"]
         ret.append(segment)
     return ret
 
 def ingest(fingerprint_list, do_commit=True, local=False, split=True):
     """ Ingest some fingerprints into the fingerprint database.
         The fingerprints should be of the form
-          {"track_id": id, "fp": fp, "artist": artist, "release": release, "track": track, "length": length, "codever": "codever"}
+          {"track_id": id,
+          "fp": fp string,
+          "artist": artist,
+          "release": release,
+          "track": track,
+          "length": length,
+          "codever": "codever",
+          "source": source,
+          "import_date":import date}
         or a list of the same. All parameters except length must be strings. Length is an integer.
         artist, release and track are not required but highly recommended.
+        The import date should be formatted as an ISO 8601 date (yyyy-mm-ddThh:mm:ssZ) and should
+        be the UTC time that the the import was performed. If the date is missing, the time the
+        script was started will be used.
         length is the length of the track being ingested in seconds.
         if track_id is empty, one will be generated.
     """
@@ -537,6 +554,10 @@ def ingest(fingerprint_list, do_commit=True, local=False, split=True):
         for fprint in fingerprint_list:
             if not ("track_id" in fprint and "fp" in fprint and "length" in fprint and "codever" in fprint):
                 raise Exception("Missing required fingerprint parameters (track_id, fp, length, codever")
+            if "import_date" not in fprint:
+                fprint["import_date"] = IMPORTDATE
+            if "source" not in fprint:
+                fprint["source"] = "local"
             split_prints = split_codes(fprint)
             docs.extend(split_prints)
             codes.extend(((c["track_id"].encode("utf-8"), c["fp"].encode("utf-8")) for c in split_prints))
