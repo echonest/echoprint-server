@@ -402,8 +402,11 @@ def local_dump():
 def local_query_fp(code_string,rows=10,get_data=False):
     keys = code_string.split(" ")[0::2]
     track_hist = []
+    unique_keys = []
     for k in keys:
-        track_hist += _fake_solr["index"].get(k, [])
+        if k not in unique_keys:
+            track_hist += _fake_solr["index"].get(k, [])
+            unique_keys += [k]
     top_matches = defaultdict(int)
     for track in track_hist:
         top_matches[track] += 1
