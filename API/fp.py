@@ -176,8 +176,8 @@ def best_match_for_query(code_string, elbow=10, local=False):
         else:
             return Response(Response.SINGLE_BAD_MATCH, qtime=response.header["QTime"], tic=tic)
 
-    # If the scores are really low (less than 10% of the query length) then say no results
-    if top_match_score < code_len * 0.1:
+    # If the scores are really low (less than 5% of the query length) then say no results
+    if top_match_score < code_len * 0.05:
         return Response(Response.MULTIPLE_BAD_HISTOGRAM_MATCH, qtime = response.header["QTime"], tic=tic)
 
     # Not a strong match, so we look up the codes in the keystore and compute actual matches...
@@ -216,7 +216,7 @@ def best_match_for_query(code_string, elbow=10, local=False):
         if trid_split not in existing_trids:
             new_sorted_actual_scores.append((trid, result))
             existing_trids.append(trid_split)
-    
+
     # We might have reduced the length of the list to 1
     if len(new_sorted_actual_scores) == 1:
         logger.info("only have 1 score result...")
@@ -246,12 +246,12 @@ def best_match_for_query(code_string, elbow=10, local=False):
     trackid = actual_score_top_track_id.split("-")[0]
     meta = metadata_for_track_id(trackid, local=local)
     
-    if actual_score_top_score < code_len * 0.1:
+    if actual_score_top_score < code_len * 0.05:
         return Response(Response.MULTIPLE_BAD_HISTOGRAM_MATCH, qtime = response.header["QTime"], tic=tic)
     else:
         # If the actual score went down it still could be close enough, so check for that
-        if actual_score_top_score > (original_scores[actual_score_top_track_id] / 2): 
-            if (actual_score_top_score - actual_score_2nd_score) >= (actual_score_top_score / 2):  # for examples [10,4], 10-4 = 6, which >= 5, so OK
+        if actual_score_top_score > (original_scores[actual_score_top_track_id] / 4): 
+            if (actual_score_top_score - actual_score_2nd_score) >= (actual_score_top_score / 3):  # for examples [10,4], 10-4 = 6, which >= 5, so OK
                 return Response(Response.MULTIPLE_GOOD_MATCH_HISTOGRAM_DECREASED, TRID=trackid, score=actual_score_top_score, qtime=response.header["QTime"], tic=tic, metadata=meta)
             else:
                 return Response(Response.MULTIPLE_BAD_HISTOGRAM_MATCH, qtime = response.header["QTime"], tic=tic)
@@ -267,6 +267,11 @@ def actual_matches(code_string_query, code_string_match, slop = 2, elbow = 10):
 
     time_diffs = {}
 
+    # Normalise the query timecodes to start with offset 0
+    code_query_int = [int(x) for x in code_query]
+    min_time = min(code_query_int[1::2])
+    code_query[1::2] = [str(x - min_time) for x in code_query_int[1::2]]
+    
     #
     # Invert the query codes
     query_codes = {}
@@ -285,7 +290,10 @@ def actual_matches(code_string_query, code_string_match, slop = 2, elbow = 10):
             match_code_time = int(code_match[match_counter])/slop
             min_dist = 32767
             for qtime in query_codes[match_code]:
-                dist = abs(match_code_time - qtime)
+                # match_code_time > qtime for all corresponding
+                # hashcodes since normalising query timecodes, so no
+                # need for abs() anymore
+                dist = match_code_time - qtime
                 if dist < min_dist:
                     min_dist = dist
             if min_dist < 32767:
