@@ -217,11 +217,12 @@ def best_match_for_query(code_string, elbow=10, local=False):
         if trid_split not in existing_trids:
             new_sorted_actual_scores.append((trid, result))
             existing_trids.append(trid_split)
+    sorted_actual_scores = new_sorted_actual_scores
 
     # We might have reduced the length of the list to 1
-    if len(new_sorted_actual_scores) == 1:
+    if len(sorted_actual_scores) == 1:
         logger.info("only have 1 score result...")
-        (top_track_id, top_score) = new_sorted_actual_scores[0]
+        (top_track_id, top_score) = sorted_actual_scores[0]
         if top_score < code_len * 0.1:
             logger.info("only result less than 10%% of the query string (%d < %d *0.1 (%d)) SINGLE_BAD_MATCH", top_score, code_len, code_len*0.1)
             return Response(Response.SINGLE_BAD_MATCH, qtime = response.header["QTime"], tic=tic)
@@ -237,8 +238,6 @@ def best_match_for_query(code_string, elbow=10, local=False):
                     top_track_id, top_score, original_scores[top_track_id]/2)
                 return Response(Response.MULTIPLE_BAD_HISTOGRAM_MATCH, qtime=response.header["QTime"], tic=tic)
         
-    sorted_actual_scores = new_sorted_actual_scores    
-
     # Get the top one
     (actual_score_top_track_id, actual_score_top_score) = sorted_actual_scores[0]
     # Get the 2nd top one (we know there is always at least 2 matches)
