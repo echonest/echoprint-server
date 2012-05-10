@@ -63,17 +63,17 @@ Additional non-included requirements for the demo:
 fp.py has all the methods you'll need.
 
     >>> import fp
-    >>> fp.ingest({"track_id": "my_track_id", "fp": "123 40 123 60 123 80 123 90 123 110 123 130", "length": "120", "codever": "4.11"})
+    >>> fp.ingest({"track_id": "my_track_id", "fp": "123 40 123 60 123 80 123 90 123 110 123 130", "length": "120", "codever": "4.12"})
     >>> fp.commit()
     >>> r = fp.best_match_for_query("123 40 124 60 125 80 126 90 127 110 128 130 129 60 123 40 127 50")
     >>> r.message()
-    'no results found (type 2)'
-    >>> example_code = "eJwtzMkBACAMAsFWKCFoDu2_MYP6ms8Cx4QbOBwpAksktiiQcoFT7hf9SSEa56UPwg4mIg3n"
+    'query code length is too small'
+    >>> example_code = "eJwty7kNADAMw8BVNILl-Mv-iwWCU11D0g_CQA-USIwoXNEg5YBH3o3-0sil7AHIrAyw"
     >>> r = fp.best_match_for_query(example_code)
     >>> r.message()
-    'OK (match type 5)'
+    'OK (match type 3)'
     >>> r.TRID
-    u'my_track_id'
+    'my_track_id'
 
 ## Running the example API server
 
