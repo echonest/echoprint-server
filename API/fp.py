@@ -131,7 +131,7 @@ def cut_code_string_length(code_string):
     # is ~= the start time given. There might be a (slightly) earlier timestamp
     # in another band, but this is good enough
     first_timestamp = int(split[1])
-    sixty_seconds = int(60.0 * 43.45 + first_timestamp)
+    sixty_seconds = int(60.0 * 1000.0 / 23.2 + first_timestamp)
     parts = []
     for (code, t) in zip(split[::2], split[1::2]):
         tstamp = int(t)
@@ -490,7 +490,7 @@ def split_codes(fp):
         track id, return track ids of the form trid-0, trid-1, trid-2, etc. """
 
     # Convert seconds into time units
-    segmentlength = 60 * 1000.0 / 43.45
+    segmentlength = 60 * 1000.0 / 23.2
     halfsegment = segmentlength / 2.0
     
     trid = fp["track_id"]
